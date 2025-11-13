@@ -313,8 +313,8 @@ class RubyHeap:
 			try:
 				typed_data = obj.cast(rtypeddata_type)
 				
-				# Compare addresses instead of values to avoid GDB conversion issues
-				if int(typed_data['type']) == int(data_type):
+				# Compare values directly using __eq__
+				if typed_data['type'] == data_type:
 					# Return the VALUE, not the extracted data pointer
 					objects.append(obj)
 					if progress:

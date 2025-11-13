@@ -35,6 +35,32 @@ class Value:
 		"""Convert value to string."""
 		return self._value.GetValue() or str(self._value.GetValueAsUnsigned())
 	
+	def __eq__(self, other):
+		"""Compare values for equality.
+		
+		Compares by address/integer value to avoid debugger conversion issues.
+		
+		Args:
+			other: Another Value, lldb.SBValue, or integer
+		
+		Returns:
+			True if values are equal
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() == other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() == other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() == int(other)
+	
+	def __hash__(self):
+		"""Return hash of value for use in sets/dicts.
+		
+		Returns:
+			Hash of the integer value
+		"""
+		return hash(self._value.GetValueAsUnsigned())
+	
 	def cast(self, type_obj):
 		"""Cast this value to a different type.
 		
