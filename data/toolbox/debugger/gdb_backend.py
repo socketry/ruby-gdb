@@ -368,6 +368,33 @@ def create_value(address, value_type):
 		# Create a gdb.Value from the integer
 		address = gdb.Value(address)
 	
+	
 	return Value(address.cast(value_type))
+
+
+def create_value_from_int(int_value, value_type):
+	"""Create a typed Value from an integer (not a memory address to read from).
+	
+	This is used when the integer itself IS the value (like VALUE which is a pointer).
+	
+	Args:
+		int_value: Integer value (not an address to read from)
+		value_type: Type object (or native gdb.Type) to cast to
+	
+	Returns:
+		Value object with the integer value
+	
+	Examples:
+		>>> value_type = debugger.lookup_type('VALUE')
+		>>> obj = debugger.create_value_from_int(0x7fff12345678, value_type)
+	"""
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	# Create a gdb.Value from the integer
+	int_val = gdb.Value(int_value)
+	return Value(int_val.cast(value_type))
+
 
 

@@ -67,6 +67,7 @@ get_enum_value = _backend.get_enum_value
 read_memory = _backend.read_memory
 read_cstring = _backend.read_cstring
 create_value = _backend.create_value
+create_value_from_int = _backend.create_value_from_int
 
 # Constants
 COMMAND_DATA = _backend.COMMAND_DATA
@@ -88,6 +89,7 @@ __all__ = [
 	'read_memory',
 	'read_cstring',
 	'create_value',
+	'create_value_from_int',
 	'COMMAND_DATA',
 	'COMMAND_USER',
 ]

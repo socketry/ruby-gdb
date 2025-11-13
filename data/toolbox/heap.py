@@ -20,6 +20,8 @@ class RubyHeap:
 		self._rbasic_type = None
 		self._value_type = None
 		self._char_ptr_type = None
+		self._flags_offset = None
+		self._value_size = None
 	
 	def initialize(self):
 		"""Initialize VM and objspace pointers.
@@ -50,6 +52,26 @@ class RubyHeap:
 			self._rbasic_type = debugger.lookup_type('struct RBasic').pointer()
 			self._value_type = debugger.lookup_type('VALUE')
 			self._char_ptr_type = debugger.lookup_type('char').pointer()
+			
+			# Cache flags field offset for fast memory access
+			# This is critical for LLDB performance where field lookup is expensive
+			try:
+				# Get a dummy RBasic to find the flags offset
+				rbasic_struct = debugger.lookup_type('struct RBasic')
+				# In RBasic, 'flags' is the first field (offset 0)
+				# We need to find its offset programmatically for portability
+				fields = rbasic_struct.fields()
+				flags_field = next((f for f in fields if f.name == 'flags'), None)
+				if flags_field:
+					self._flags_offset = flags_field.bitpos // 8
+				else:
+					# Flags is typically the first field (offset 0)
+					self._flags_offset = 0
+				self._value_size = self._value_type.sizeof
+			except (debugger.Error, AttributeError):
+				# Fallback: flags is at offset 0 (first field in RBasic)
+				self._flags_offset = 0
+				self._value_size = 8
 
 			return True
 		except debugger.Error as e:
@@ -61,6 +83,30 @@ class RubyHeap:
 			print("The Ruby VM may not be fully initialized yet.")
 			print("Try breaking at a point where Ruby is running (e.g., after rb_vm_exec).")
 			return False
+	
+	def _read_flags_fast(self, obj_address):
+		"""Read flags field directly from memory without field lookup.
+		
+		This is a critical optimization for LLDB where GetChildMemberWithName
+		is expensive. By reading flags directly using the cached offset,
+		we avoid thousands of field lookups during heap iteration.
+		
+		Args:
+			obj_address: Memory address of the RBasic object
+		
+		Returns:
+			Integer flags value
+		"""
+		try:
+			flags_address = obj_address + self._flags_offset
+			# Read VALUE-sized memory at flags offset
+			flags_bytes = debugger.read_memory(flags_address, self._value_size)
+			# Convert bytes to integer (little-endian on x86_64)
+			return int.from_bytes(flags_bytes, byteorder='little', signed=False)
+		except (debugger.Error, debugger.MemoryError):
+			# Fallback to field access if direct memory read fails
+			obj_ptr = debugger.create_value(obj_address, self._rbasic_type)
+			return int(obj_ptr['flags'])
 	
 	def _get_page(self, page_index):
 		"""Get a heap page by index, handling Ruby version differences.
@@ -222,11 +268,8 @@ class RubyHeap:
 				print(f"Error reading page {i}: {e}", file=sys.stderr)
 				continue
 
-			# OPTIMIZATION: Create base pointer once per page
-			try:
-				base_ptr = debugger.create_value(start, self._rbasic_type)
-			except (debugger.Error, RuntimeError):
-				continue
+			# We don't need to create a base pointer since we're using direct memory reads
+			# and only creating Values for live objects
 
 			# For the first page, calculate which slot to start from
 			start_slot = 0
@@ -241,25 +284,55 @@ class RubyHeap:
 				if start_slot < 0:
 					start_slot = 0
 
-			# Iterate through objects using pointer arithmetic (much faster!)
+			# OPTIMIZATION: Read all flags for this page in one memory read
+			# This dramatically reduces the number of debugger API calls
+			try:
+				# Calculate how much memory we need to read
+				# We need to read flags for each slot (flags is VALUE-sized, at offset self._flags_offset)
+				flags_data = None
+				if total_slots > 0:
+					# Read flags for all slots in one shot
+					# Each slot is slot_size bytes, flags is at self._flags_offset within each slot
+					# We'll read the entire page and extract flags as needed
+					page_size = total_slots * slot_size
+					try:
+						page_data = debugger.read_memory(start, page_size)
+						flags_data = page_data
+					except (debugger.Error, debugger.MemoryError):
+						# If bulk read fails, fall back to individual reads
+						flags_data = None
+			except:
+				flags_data = None
+
+			# Iterate through objects using array indexing
 			for j in range(start_slot, total_slots):
 				try:
 					# Calculate byte offset and address
 					byte_offset = j * slot_size
 					obj_address = start + byte_offset
 
-					# Use pointer arithmetic (much faster than creating new Value)
-					obj_ptr = (base_ptr.cast(self._char_ptr_type) + byte_offset).cast(self._rbasic_type)
+					# OPTIMIZATION: Read flags from bulk-read memory if available
+					if flags_data is not None:
+						try:
+							# Extract flags from the bulk-read data
+							flags_offset_in_page = byte_offset + self._flags_offset
+							flags_bytes = flags_data[flags_offset_in_page:flags_offset_in_page + self._value_size]
+							flags = int.from_bytes(flags_bytes, byteorder='little', signed=False)
+						except (IndexError, ValueError):
+							# Fall back to direct read
+							flags = self._read_flags_fast(obj_address)
+					else:
+						# No bulk data, read directly
+						flags = self._read_flags_fast(obj_address)
 
-					# Read the flags
-					flags = int(obj_ptr['flags'])
-
-					# Skip free objects
+					# Skip free objects (most common case - skip early)
 					if flags == 0:
 						continue
 
-					# Yield the VALUE, flags, and address
-					obj = obj_ptr.cast(self._value_type)
+					# Create VALUE for live objects
+					# For VALUE type: obj_address IS the VALUE (it's the pointer to the heap slot)
+					# We need to create a VALUE containing obj_address, not read from obj_address
+					obj = debugger.create_value_from_int(obj_address, self._value_type)
 					yield obj, flags, obj_address
 				except (debugger.Error, RuntimeError):
 					continue

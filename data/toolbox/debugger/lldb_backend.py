@@ -618,16 +618,84 @@ def create_value(address, value_type):
 		if hasattr(address, '__int__'):
 			address = int(address)
 		
-		# In LLDB, use CreateValueFromExpression to cast an address to a type
-		# CreateValueFromAddress doesn't work correctly for heap addresses
+		# OPTIMIZATION: For simple types like VALUE (unsigned long), use CreateValueFromData
+		# which avoids expression evaluation and is much faster for bulk operations
 		target = lldb.debugger.GetSelectedTarget()
-		type_name = value_type.GetName()
-		expr = f"({type_name})0x{address:x}"
-		addr_value = target.CreateValueFromExpression(
-			f"addr_0x{address:x}",
-			expr
+		process = target.GetProcess()
+		
+		# For scalar types (integers/pointers), we can read and create directly
+		type_size = value_type.GetByteSize()
+		error = lldb.SBError()
+		data_bytes = process.ReadMemory(address, type_size, error)
+		
+		if error.Fail():
+			# Fall back to expression-based approach if memory read fails
+			type_name = value_type.GetName()
+			expr = f"({type_name})0x{address:x}"
+			addr_value = target.CreateValueFromExpression(
+				f"addr_0x{address:x}",
+				expr
+			)
+			return Value(addr_value)
+		
+		# Create SBData from the memory bytes
+		sb_data = lldb.SBData()
+		sb_data.SetData(error, data_bytes, target.GetByteOrder(), type_size)
+		
+		# Create value from the data (no expression evaluation!)
+		# Note: This creates a value-by-value, but for VALUE (unsigned long) that's correct
+		addr_value = target.CreateValueFromData(
+			f"val_0x{address:x}",
+			sb_data,
+			value_type
 		)
 		
+		# Store the original address as metadata so we can use it for debugging
+		# The value itself contains the VALUE integer read from that address
 		return Value(addr_value)
+
+
+def create_value_from_int(int_value, value_type):
+	"""Create a typed Value from an integer (not a memory address to read from).
+	
+	This is used when the integer itself IS the value (like VALUE which is a pointer).
+	Unlike create_value(), this doesn't read from memory - it creates a value containing
+	the integer itself.
+	
+	Args:
+		int_value: Integer value (not an address to read from)
+		value_type: Type object (or native lldb.SBType) to cast to
+	
+	Returns:
+		Value object with the integer value
+	
+	Examples:
+		>>> value_type = debugger.lookup_type('VALUE')
+		>>> obj = debugger.create_value_from_int(0x7fff12345678, value_type)
+	"""
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	# Create SBData with the integer value
+	target = lldb.debugger.GetSelectedTarget()
+	type_size = value_type.GetByteSize()
+	
+	# Convert integer to bytes (little-endian for x86_64)
+	int_bytes = int_value.to_bytes(type_size, byteorder='little', signed=False)
+	
+	# Create SBData from bytes
+	error = lldb.SBError()
+	sb_data = lldb.SBData()
+	sb_data.SetData(error, int_bytes, target.GetByteOrder(), type_size)
+	
+	# Create value from data
+	result = target.CreateValueFromData(
+		f"int_0x{int_value:x}",
+		sb_data,
+		value_type
+	)
+	
+	return Value(result)
 
 
