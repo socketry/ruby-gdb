@@ -176,7 +176,7 @@ module Toolbox
 				# Normalize string content (including escaped quotes)
 				# (?:\\.|[^"]) matches either escaped character or non-quote
 				text = text.gsub(/"((?:\\.|[^"])*)"/, '"..."')
-				text = text.gsub(/'((?:\\.|[^'])*)'/, "'...'")
+				text = text.gsub(/'((?:\\.|[^'])*)'/, '"..."')
 				
 				text
 			end

@@ -208,23 +208,27 @@ def RString(value):
 	rstring = value.cast(constants.type_struct('struct RString').pointer())
 	
 	# Try top-level len field (Ruby 3.3+/3.4+)
-	try:
-		_ = rstring.dereference()['len']
+	len_field = rstring.dereference()['len']
+	if len_field is not None:
 		# Now check if embed structure has len field (3.3) or just ary (3.4+)
-		try:
-			_ = rstring.dereference()['as']['embed']['len']
-			return RString33(value)
-		except Exception:
-			return RString34(value)
-	except Exception:
-		pass
+		as_union = rstring.dereference()['as']
+		if as_union is not None:
+			embed_struct = as_union['embed']
+			if embed_struct is not None:
+				embed_len = embed_struct['len']
+				if embed_len is not None:
+					return RString33(value)
+				else:
+					return RString34(value)
 	
 	# Try RVARGC embedded len field (3.2 RVARGC)
-	try:
-		_ = rstring.dereference()['as']['embed']['len']
-		return RString32RVARGC(value)
-	except Exception:
-		pass
+	as_union = rstring.dereference()['as']
+	if as_union is not None:
+		embed_struct = as_union['embed']
+		if embed_struct is not None:
+			embed_len = embed_struct['len']
+			if embed_len is not None:
+				return RString32RVARGC(value)
 	
 	# Fallback to legacy 3.2
 	return RString32Legacy(value)

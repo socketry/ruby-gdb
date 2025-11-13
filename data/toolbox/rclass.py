@@ -90,7 +90,10 @@ class RClass:
 				# Try to access classext.classpath
 				try:
 					# Try embedded classext (RCLASS_EXT_EMBEDDED)
-					classext_ptr = debugger.parse_and_eval(f"(rb_classext_t *)((char *){int(self.klass)} + sizeof(struct RClass))")
+					rclass_size = debugger.parse_and_eval("sizeof(struct RClass)")
+					classext_addr = int(self.klass) + int(rclass_size)
+					classext_type = debugger.lookup_type('rb_classext_t')
+					classext_ptr = debugger.create_value_from_address(classext_addr, classext_type).address
 					classpath_val = classext_ptr['classpath']
 				except:
 					# Try pointer-based classext

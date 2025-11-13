@@ -6,4 +6,4 @@ Fiber #0: <T_DATA@...> → <struct rb_fiber_struct@...>
   VM Stack: <VALUE *@...>
   CFP: <rb_control_frame_t@...>
 
-Fibers cached. Use '...' to switch to a fiber.
+Fibers cached. Use "..." to switch to a fiber.

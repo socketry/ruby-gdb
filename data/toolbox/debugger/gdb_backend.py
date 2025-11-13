@@ -97,20 +97,73 @@ class Value:
 			key: Field name (str) or array index (int)
 		
 		Returns:
-			Value of the field/element
+			Value of the field/element, or None if field doesn't exist or is invalid
 		"""
-		return Value(self._value[key])
+		try:
+			result = self._value[key]
+			return Value(result)
+		except (gdb.error, KeyError, AttributeError):
+			return None
 	
-	def __add__(self, offset):
-		"""Pointer arithmetic: add offset.
+	def __add__(self, other):
+		"""Add to this value.
 		
 		Args:
-			offset: Integer offset to add
+			other: Value, gdb.Value, or integer to add
 		
 		Returns:
-			New Value with adjusted pointer
+			Integer result of addition
 		"""
-		return Value(self._value + offset)
+		if isinstance(other, Value):
+			return int(self._value) + int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) + int(other)
+		else:
+			return int(self._value) + int(other)
+	
+	def __radd__(self, other):
+		"""Reverse add - when Value is on the right side of +.
+		
+		Args:
+			other: Value, gdb.Value, or integer to add
+		
+		Returns:
+			Integer result of addition
+		"""
+		return self.__add__(other)
+	
+	def __sub__(self, other):
+		"""Subtract from this value.
+		
+		Args:
+			other: Value, gdb.Value, or integer to subtract
+		
+		Returns:
+			Integer result of subtraction
+		"""
+		if isinstance(other, Value):
+			return int(self._value) - int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) - int(other)
+		else:
+			return int(self._value) - int(other)
+	
+	def __rsub__(self, other):
+		"""Reverse subtract - when Value is on the right side of -.
+		
+		Args:
+			other: Value, gdb.Value, or integer to subtract from
+		
+		Returns:
+			Integer result of subtraction
+		"""
+		if isinstance(other, Value):
+			return int(other._value) - int(self._value)
+		elif isinstance(other, gdb.Value):
+			return int(other) - int(self._value)
+		else:
+			return int(other) - int(self._value)
+
 	
 	@property
 	def type(self):
@@ -153,6 +206,17 @@ class Type:
 			Type representing pointer to this type
 		"""
 		return Type(self._type.pointer())
+	
+	def array(self, count):
+		"""Get array type of this type.
+		
+		Args:
+			count: Number of elements in the array
+		
+		Returns:
+			Type representing array of this type
+		"""
+		return Type(self._type.array(count))
 	
 	@property
 	def native(self):
@@ -378,7 +442,7 @@ def create_value_from_int(int_value, value_type):
 	This is used when the integer itself IS the value (like VALUE which is a pointer).
 	
 	Args:
-		int_value: Integer value (not an address to read from)
+		int_value: Integer value, or Value object that will be converted to int
 		value_type: Type object (or native gdb.Type) to cast to
 	
 	Returns:
@@ -386,8 +450,13 @@ def create_value_from_int(int_value, value_type):
 	
 	Examples:
 		>>> value_type = debugger.lookup_type('VALUE')
-		>>> obj = debugger.create_value_from_int(0x7fff12345678, value_type)
+		>>> obj_address = page['start']  # Value object
+		>>> obj = debugger.create_value_from_int(obj_address, value_type)
 	"""
+	# Convert to integer if needed (handles Value objects via __int__)
+	if hasattr(int_value, '__int__'):
+		int_value = int(int_value)
+	
 	# Unwrap Type if needed
 	if isinstance(value_type, Type):
 		value_type = value_type._type
@@ -395,6 +464,43 @@ def create_value_from_int(int_value, value_type):
 	# Create a gdb.Value from the integer
 	int_val = gdb.Value(int_value)
 	return Value(int_val.cast(value_type))
+
+
+def create_value_from_address(address, value_type):
+	"""Create a typed Value from a memory address.
+	
+	In GDB, this is equivalent to casting the address to a pointer type
+	and dereferencing it.
+	
+	Args:
+		address: Memory address (as integer, or Value object representing a pointer)
+		value_type: Type object (or native gdb.Type) representing the type
+	
+	Returns:
+		Value object representing the data at that address
+	
+	Examples:
+		>>> rbasic_type = debugger.lookup_type('struct RBasic')
+		>>> array_type = rbasic_type.array(100)
+		>>> page_start = page['start']  # Value object
+		>>> page_array = debugger.create_value_from_address(page_start, array_type)
+	"""
+	# Convert to integer if needed (handles Value objects via __int__)
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	# Create a pointer to the type and dereference it
+	# This is GDB's way of saying "interpret this address as this type"
+	ptr_type = value_type.pointer()
+	addr_val = gdb.Value(address).cast(ptr_type)
+	return Value(addr_val.dereference())
+
+
+
 
 
 

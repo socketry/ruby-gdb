@@ -28,10 +28,9 @@ class RHashSTTable(RHashBase):
 		super().__init__(value)
 		# Calculate st_table pointer
 		rhash_size = debugger.parse_and_eval("sizeof(struct RHash)")
-		# Note: gdb.Value() doesn't have a direct equivalent in the abstraction
-		# We'll use parse_and_eval with a cast expression instead
-		st_table_ptr = debugger.parse_and_eval(f"(st_table *){int(value) + int(rhash_size)}")
-		self.st_table = st_table_ptr.cast(constants.type_struct("st_table").pointer())
+		st_table_addr = int(value) + int(rhash_size)
+		st_table_type = constants.type_struct("st_table")
+		self.st_table = debugger.create_value_from_address(st_table_addr, st_table_type).address
 	
 	def size(self):
 		return int(self.st_table.dereference()['num_entries'])
@@ -82,15 +81,16 @@ class RHashARTable(RHashBase):
 		super().__init__(value)
 		# Feature detection: check if as.ar field exists (Ruby 3.2)
 		# vs embedded after RHash (Ruby 3.3+)
-		try:
-			# Try Ruby 3.2 layout: ar_table is accessed via as.ar pointer
-			self.ar_table = self.rhash.dereference()['as']['ar']
-		except (debugger.Error, KeyError):
+		as_union = self.rhash.dereference()['as']
+		if as_union is not None:
+			# Ruby 3.2 layout: ar_table is accessed via as.ar pointer
+			self.ar_table = as_union['ar']
+		else:
 			# Ruby 3.3+: ar_table is embedded directly after RHash structure
 			rhash_size = debugger.parse_and_eval("sizeof(struct RHash)")
 			ar_table_addr = int(self.rhash) + int(rhash_size)
-			# Use parse_and_eval with cast instead of gdb.Value()
-			self.ar_table = debugger.parse_and_eval(f"(struct ar_table_struct *){ar_table_addr}")
+			ar_table_type = constants.type_struct("struct ar_table_struct")
+			self.ar_table = debugger.create_value_from_address(ar_table_addr, ar_table_type).address
 		
 		# Get array table size and bound from flags
 		self.ar_size = ((self.flags & constants.get("RHASH_AR_TABLE_SIZE_MASK")) >> constants.get("RHASH_AR_TABLE_SIZE_SHIFT"))

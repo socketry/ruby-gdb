@@ -125,6 +125,65 @@ class Value:
 		else:
 			return self._value.GetValueAsUnsigned() >= int(other)
 	
+	def __add__(self, other):
+		"""Add to this value.
+		
+		Args:
+			other: Value, SBValue, or integer to add
+		
+		Returns:
+			Integer result of addition
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() + other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() + other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() + int(other)
+	
+	def __radd__(self, other):
+		"""Reverse add - when Value is on the right side of +.
+		
+		Args:
+			other: Value, SBValue, or integer to add
+		
+		Returns:
+			Integer result of addition
+		"""
+		return self.__add__(other)
+	
+	def __sub__(self, other):
+		"""Subtract from this value.
+		
+		Args:
+			other: Value, SBValue, or integer to subtract
+		
+		Returns:
+			Integer result of subtraction
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() - other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() - other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() - int(other)
+	
+	def __rsub__(self, other):
+		"""Reverse subtract - when Value is on the right side of -.
+		
+		Args:
+			other: Value, SBValue, or integer to subtract from
+		
+		Returns:
+			Integer result of subtraction
+		"""
+		if isinstance(other, Value):
+			return other._value.GetValueAsUnsigned() - self._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return other.GetValueAsUnsigned() - self._value.GetValueAsUnsigned()
+		else:
+			return int(other) - self._value.GetValueAsUnsigned()
+	
 	def cast(self, type_obj):
 		"""Cast this value to a different type.
 		
@@ -164,10 +223,15 @@ class Value:
 			key: Field name (str) or array index (int)
 		
 		Returns:
-			Value of the field/element
+			Value of the field/element, or None if field doesn't exist or is invalid
 		"""
 		if isinstance(key, str):
-			return Value(self._value.GetChildMemberWithName(key))
+			result = self._value.GetChildMemberWithName(key)
+			# Check if the result is valid
+			if result.IsValid() and not result.GetError().Fail():
+				return Value(result)
+			else:
+				return None
 		else:
 			# For integer index: check if this is a pointer type or array type
 			# Both need pointer-style arithmetic (arrays for flexible array members)
@@ -316,6 +380,17 @@ class Type:
 			Type representing pointer to this type
 		"""
 		return Type(self._type.GetPointerType())
+	
+	def array(self, count):
+		"""Get array type of this type.
+		
+		Args:
+			count: Number of elements in the array (count - 1 for LLDB)
+		
+		Returns:
+			Type representing array of this type
+		"""
+		return Type(self._type.GetArrayType(count + 1))
 	
 	@property
 	def native(self):
@@ -618,9 +693,20 @@ def create_value(address, value_type):
 		if hasattr(address, '__int__'):
 			address = int(address)
 		
+		target = lldb.debugger.GetSelectedTarget()
+		
+		# For array types, use expression evaluation (CreateValueFromData doesn't work for large arrays)
+		if value_type.IsArrayType():
+			type_name = value_type.GetName()
+			expr = f"*({type_name}*)0x{address:x}"
+			addr_value = target.CreateValueFromExpression(
+				f"array_0x{address:x}",
+				expr
+			)
+			return Value(addr_value)
+		
 		# OPTIMIZATION: For simple types like VALUE (unsigned long), use CreateValueFromData
 		# which avoids expression evaluation and is much faster for bulk operations
-		target = lldb.debugger.GetSelectedTarget()
 		process = target.GetProcess()
 		
 		# For scalar types (integers/pointers), we can read and create directly
@@ -655,6 +741,56 @@ def create_value(address, value_type):
 		return Value(addr_value)
 
 
+def create_value_from_address(address, value_type):
+	"""Create a typed Value from a memory address.
+	
+	This uses CreateValueFromAddress to create a value of the given type at the
+	specified address. This is more efficient than CreateValueFromExpression
+	and supports array types directly.
+	
+	Args:
+		address: Memory address (as integer, or Value object representing a pointer)
+		value_type: Type object (or native lldb.SBType) representing the type
+	
+	Returns:
+		Value object representing the data at that address
+	
+	Examples:
+		>>> rbasic_type = debugger.lookup_type('struct RBasic')
+		>>> array_type = rbasic_type.array(100)
+		>>> page_start = page['start']  # Value object
+		>>> page_array = debugger.create_value_from_address(page_start, array_type)
+	"""
+	# Convert to integer address if needed (handles Value objects via __int__)
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	target = lldb.debugger.GetSelectedTarget()
+	
+	# CreateValueFromAddress takes an SBAddress, not an integer
+	# We need to create an SBAddress from the load address
+	sb_addr = target.ResolveLoadAddress(address)
+	if not sb_addr.IsValid():
+		raise MemoryError(f"Invalid address: 0x{address:x}")
+	
+	# CreateValueFromAddress takes an address and creates a value of the given type
+	# reading from that memory location
+	addr_value = target.CreateValueFromAddress(
+		f"val_at_0x{address:x}",
+		sb_addr,
+		value_type
+	)
+	
+	if not addr_value.IsValid():
+		raise MemoryError(f"Failed to create value from address 0x{address:x}")
+	
+	return Value(addr_value)
+
+
 def create_value_from_int(int_value, value_type):
 	"""Create a typed Value from an integer (not a memory address to read from).
 	
@@ -663,7 +799,7 @@ def create_value_from_int(int_value, value_type):
 	the integer itself.
 	
 	Args:
-		int_value: Integer value (not an address to read from)
+		int_value: Integer value, or Value object that will be converted to int
 		value_type: Type object (or native lldb.SBType) to cast to
 	
 	Returns:
@@ -671,8 +807,13 @@ def create_value_from_int(int_value, value_type):
 	
 	Examples:
 		>>> value_type = debugger.lookup_type('VALUE')
-		>>> obj = debugger.create_value_from_int(0x7fff12345678, value_type)
+		>>> obj_address = page['start']  # Value object
+		>>> obj = debugger.create_value_from_int(obj_address, value_type)
 	"""
+	# Convert to integer if needed (handles Value objects via __int__)
+	if hasattr(int_value, '__int__'):
+		int_value = int(int_value)
+	
 	# Unwrap Type if needed
 	if isinstance(value_type, Type):
 		value_type = value_type._type

@@ -48,11 +48,16 @@ class RubySymbol:
 			global_symbols = debugger.parse_and_eval("ruby_global_symbols")
 			
 			# Ruby 3.5+ changed from last_id to next_id
-			try:
-				last_id = int(global_symbols['last_id'])
-			except (debugger.Error, KeyError) as e:
+			last_id_field = global_symbols['last_id']
+			if last_id_field is not None:
+				last_id = int(last_id_field)
+			else:
 				# Ruby 3.5+ uses next_id instead
-				last_id = int(global_symbols['next_id']) - 1
+				next_id_field = global_symbols['next_id']
+				if next_id_field is not None:
+					last_id = int(next_id_field) - 1
+				else:
+					return None
 			
 			if not serial or serial > last_id:
 				return None

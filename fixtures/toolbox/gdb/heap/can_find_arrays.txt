@@ -8,4 +8,4 @@ Found 3 object(s):
 
 Objects saved in $heap0 through $heap2
 Next scan address saved to $heap: 0x...
-Run '...' for next page
+Run "..." for next page
