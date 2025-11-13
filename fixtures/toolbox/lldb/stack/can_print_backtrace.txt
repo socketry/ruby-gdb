@@ -1,6 +1,7 @@
 Stack trace for current thread:
+
   #0: [C function (0x...)]
-  #1: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:6:in 'inner_method'
-  #2: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:11:in 'middle_method'
-  #3: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:15:in 'outer_method'
-  #4: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:0:in '<main>'
+  #1: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:6:in "..."
+  #2: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:11:in "..."
+  #3: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:15:in "..."
+  #4: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:0:in "..."

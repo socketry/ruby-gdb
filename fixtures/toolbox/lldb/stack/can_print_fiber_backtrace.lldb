@@ -7,6 +7,8 @@ b rb_f_puts
 run
 
 # Print the Ruby stack trace for the fiber
+script print("===TOOLBOX-OUTPUT-START===")
 rb-stack-trace
+script print("===TOOLBOX-OUTPUT-END===")
 
 quit

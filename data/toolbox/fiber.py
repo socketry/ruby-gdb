@@ -376,9 +376,9 @@ class RubyFiberScanHeapCommand(debugger.Command):
         _fiber_cache = fiber_values
 
         if limit and len(fiber_values) >= limit:
-            print(f"\nFound {len(fiber_values)} fiber(s) (limit reached):\n")
+            print(f"Found {len(fiber_values)} fiber(s) (limit reached):\n")
         else:
-            print(f"\nFound {len(fiber_values)} fiber(s):\n")
+            print(f"Found {len(fiber_values)} fiber(s):\n")
 
         for i, fiber_val in enumerate(fiber_values):
             fiber_obj = RubyFiber(fiber_val)

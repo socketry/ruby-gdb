@@ -103,34 +103,22 @@ module Toolbox
 			def normalize_output(output, debugger_prompts: [])
 				# Extract content between markers if present
 				if output =~ /===TOOLBOX-OUTPUT-START===\n(.*?)\n===TOOLBOX-OUTPUT-END===/m
-					content = $1
-					
-					# Apply all normalizations
-					content = normalize_addresses(content)
-					content = normalize_type_tags(content)
-					content = normalize_strings(content)
-					
-					return content.strip + "\n"
+					output = $1
 				end
 				
-				# Fallback: filter and normalize line by line
-				lines = output.split("\n")
-				filtered = []
+				# Apply broad normalizations to the whole text first
+				output = normalize_addresses(output)
+				output = normalize_type_tags(output)
+				output = normalize_strings(output)
+				output = normalize_paths(output)
 				
-				lines.each do |line|
-					# Skip debugger-specific prompts
-					next if debugger_prompts.any?{|pattern| line.match?(pattern)}
-					
-					# Remove ANSI color codes
-					line = line.gsub(/\e\[\d+m/, "")
-					
-					# Apply normalizations
-					line = normalize_line(line)
-					
-					filtered << line unless line.strip.empty?
-				end
-				
-				filtered.join("\n").strip + "\n"
+				return output
+			end
+			
+			def normalize_paths(text)
+				root = File.expand_path("../..", __dir__)
+				text.gsub!(root, "[...]")
+				text
 			end
 			
 			# Normalize addresses in output
@@ -158,7 +146,7 @@ module Toolbox
 				# Normalize process IDs: "Process 12345" -> "Process <PID>"
 				text = text.gsub(/Process \d+ (launched|stopped|exited)/, 'Process <PID> \1')
 				
-				text
+				return text
 			end
 			
 			# Normalize type tags in output
@@ -168,7 +156,7 @@ module Toolbox
 				# Normalize plain numbers in angle brackets: <12345> -> <...>
 				text = text.gsub(/<\d+>/, "<...>")
 				
-				text
+				return text
 			end
 			
 			# Normalize strings in output
@@ -180,36 +168,7 @@ module Toolbox
 				text = text.gsub(/"((?:\\.|[^"])*)"/, '"..."')
 				text = text.gsub(/'((?:\\.|[^'])*)'/, '"..."')
 				
-				text
-			end
-			
-			# Normalize a single line of output
-			# @param line [String] Line to normalize
-			# @return [String] Normalized line
-			def normalize_line(line)
-				# Apply address normalizations
-				line = normalize_addresses(line)
-				
-				# GDB-specific: Breakpoint lines
-				if line.match?(/^Breakpoint \d+ at /)
-					line = line.gsub(/^(Breakpoint \d+) at 0x[0-9a-f]+:/, '\1:')
-				end
-				
-				# Normalize memory addresses in table/array/struct headers
-				if line.match?(/(AR Table|ST Table|Heap Array|Embedded Array|Heap Struct|Embedded Struct) at (0x[0-9a-f]+|\d+)/)
-					line = line.gsub(/ at (?:0x[0-9a-f]+|\d+)/, " at <address>")
-				end
-				
-				# Normalize bignum length (varies by Ruby version)
-				if line.match?(/Bignum \((embedded|heap), length \d+\)/)
-					line = line.gsub(/(Bignum \((embedded|heap), length) \d+/, '\1 ...')
-				end
-				
-				# Normalize file paths:
-				root = File.expand_path("../..", __dir__)
-				line.gsub!(root, "[...]")
-				
-				line
+				return text
 			end
 		end
 	end
