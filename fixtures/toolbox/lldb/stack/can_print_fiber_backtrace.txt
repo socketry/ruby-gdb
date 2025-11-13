@@ -1,5 +1,5 @@
 Stack trace for current thread:
   #0: [C function (0x...)]
-  #1: /home/samuel/Developer/socketry/toolbox/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:6:in 'fiber_inner_method'
-  #2: /home/samuel/Developer/socketry/toolbox/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:10:in 'fiber_middle_method'
-  #3: /home/samuel/Developer/socketry/toolbox/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:14:in 'block in <main>'
+  #1: [...]/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:6:in 'fiber_inner_method'
+  #2: [...]/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:10:in 'fiber_middle_method'
+  #3: [...]/fixtures/toolbox/lldb/stack/can_print_fiber_backtrace.rb:14:in 'block in <main>'

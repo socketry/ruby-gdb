@@ -203,6 +203,10 @@ module Toolbox
 					line = line.gsub(/(Bignum \((embedded|heap), length) \d+/, '\1 ...')
 				end
 				
+				# Normalize file paths:
+				root = File.expand_path("../..", __dir__)
+				line.gsub!(root, "[...]")
+				
 				line
 			end
 		end
