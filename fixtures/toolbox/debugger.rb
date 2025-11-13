@@ -167,6 +167,7 @@ module Toolbox
 				# (?:\\.|[^"]) matches either escaped character or non-quote
 				text = text.gsub(/"((?:\\.|[^"])*)"/, '"..."')
 				text = text.gsub(/'((?:\\.|[^'])*)'/, '"..."')
+				text = text.gsub(/CREATED|RESUMED|SUSPENDED|TERMINATED/, "[state]")
 				
 				return text
 			end

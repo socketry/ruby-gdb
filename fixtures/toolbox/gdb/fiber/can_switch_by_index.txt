@@ -1,8 +1,7 @@
 Found 1 fiber(s) (limit reached):
 
 Fiber #0: <T_DATA@...> → <struct rb_fiber_struct@...>
-  Status: TERMINATED
-  Exception: RuntimeError
+  Status: [state]
   Stack: <void *@...>
   VM Stack: <VALUE *@...>
   CFP: <rb_control_frame_t@...>
@@ -10,17 +9,15 @@ Fiber #0: <T_DATA@...> → <struct rb_fiber_struct@...>
 Fibers cached. Use "..." to switch to a fiber.
 
 Switching to Fiber #0: VALUE 0x...
-Warning: Fiber is TERMINATED, may not have valid saved context
-
 Switched to Fiber: <T_DATA@...> → <struct rb_fiber_struct@...>
-  Status: TERMINATED
-  Exception: RuntimeError
+  Status: [state]
 
 Convenience variables set:
   $fiber     = Current fiber VALUE
   $fiber_ptr = Current fiber pointer (struct rb_fiber_struct *)
   $ec        = Execution context (rb_execution_context_t *)
   $errinfo   = Exception being handled (VALUE)
+  $retval    = Return value from "..." (VALUE)
 
 Now try:
   bt          # Show C backtrace of fiber
@@ -28,6 +25,7 @@ Now try:
   up/down     # Move up/down frames
   info locals # Show local variables
   rp $errinfo # Pretty print exception
+  rp $retval  # Pretty print return value (in ensure blocks)
 
 Useful VALUES to inspect:
   $ec->tag->retval        # Return value (in ensure after "...")

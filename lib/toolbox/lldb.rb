@@ -6,6 +6,7 @@
 require_relative "../toolbox"
 
 module Toolbox
+	# @namespace
 	module LLDB
 		# Path to the toolbox data directory.
 		def self.data_path

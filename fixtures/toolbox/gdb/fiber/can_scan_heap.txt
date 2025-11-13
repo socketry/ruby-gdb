@@ -1,7 +1,7 @@
 Found 1 fiber(s) (limit reached):
 
 Fiber #0: <T_DATA@...> → <struct rb_fiber_struct@...>
-  Status: SUSPENDED
+  Status: [state]
   Stack: <void *@...>
   VM Stack: <VALUE *@...>
   CFP: <rb_control_frame_t@...>

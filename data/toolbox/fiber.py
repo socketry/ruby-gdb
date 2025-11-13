@@ -220,14 +220,7 @@ class RubyFiber:
 
 
 class RubyFiberScanHeapCommand(debugger.Command):
-    """Scan heap and list all Ruby fibers.
-
-    Usage: rb-fiber-scan-heap [limit] [--cache [filename]]
-    Examples: rb-fiber-scan-heap                    # Find all fibers
-              rb-fiber-scan-heap 10                 # Find first 10 fibers
-              rb-fiber-scan-heap --cache            # Use fibers.json cache
-              rb-fiber-scan-heap --cache my.json    # Use custom cache file
-    """
+    """Scan heap and list all Ruby fibers."""
 
     def __init__(self):
         super(RubyFiberScanHeapCommand, self).__init__("rb-fiber-scan-heap", debugger.COMMAND_USER)
@@ -235,10 +228,11 @@ class RubyFiberScanHeapCommand(debugger.Command):
     
     def usage(self):
         """Print usage information."""
-        print("Usage: rb-fiber-scan-heap [limit] [--cache [filename]]")
+        print("Usage: rb-fiber-scan-heap [limit] [--cache [filename]] [--terminated]")
         print("Examples:")
-        print("  rb-fiber-scan-heap                    # Find all fibers")
-        print("  rb-fiber-scan-heap 10                 # Find first 10 fibers")
+        print("  rb-fiber-scan-heap                    # Find all non-terminated fibers")
+        print("  rb-fiber-scan-heap 10                 # Find first 10 non-terminated fibers")
+        print("  rb-fiber-scan-heap --terminated       # Include terminated fibers")
         print("  rb-fiber-scan-heap --cache            # Use fibers.json cache")
         print("  rb-fiber-scan-heap --cache my.json    # Use custom cache file")
 
@@ -332,11 +326,27 @@ class RubyFiberScanHeapCommand(debugger.Command):
         # Check for --cache flag
         use_cache = arguments.has_flag('cache')
         cache_file = arguments.get_option('cache', 'fibers.json')
+        
+        # Check for --terminated flag
+        include_terminated = arguments.has_flag('terminated')
 
         # Try to load from cache if requested
         if use_cache:
             loaded_fibers = self.load_cache(cache_file)
             if loaded_fibers is not None:
+                # Filter out terminated fibers unless --terminated is specified
+                if not include_terminated:
+                    filtered_fibers = []
+                    for fiber_val in loaded_fibers:
+                        try:
+                            fiber_obj = RubyFiber(fiber_val)
+                            if fiber_obj.status != "TERMINATED":
+                                filtered_fibers.append(fiber_val)
+                        except:
+                            # Keep fibers we can't inspect
+                            filtered_fibers.append(fiber_val)
+                    loaded_fibers = filtered_fibers
+                
                 # Successfully loaded from cache
                 _fiber_cache = loaded_fibers
 
@@ -371,6 +381,19 @@ class RubyFiberScanHeapCommand(debugger.Command):
 
         # Use RubyHeap to find fibers (returns VALUEs)
         fiber_values = self.heap.find_typed_data(fiber_data_type, limit=limit, progress=True)
+        
+        # Filter out terminated fibers unless --terminated is specified
+        if not include_terminated:
+            filtered_fibers = []
+            for fiber_val in fiber_values:
+                try:
+                    fiber_obj = RubyFiber(fiber_val)
+                    if fiber_obj.status != "TERMINATED":
+                        filtered_fibers.append(fiber_val)
+                except:
+                    # Keep fibers we can't inspect
+                    filtered_fibers.append(fiber_val)
+            fiber_values = filtered_fibers
 
         # Cache the VALUEs for later use
         _fiber_cache = fiber_values

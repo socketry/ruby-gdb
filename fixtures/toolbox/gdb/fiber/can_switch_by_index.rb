@@ -3,15 +3,11 @@
 # Released under the MIT License.
 # Copyright, 2025, by Samuel Williams.
 
+GC.start
+GC.compact
+
 fiber = Fiber.new do
-	raise "Test exception in fiber"
+	puts "Fiber created"
 end
 
-# Start the fiber so it has state
-begin
-	fiber.resume
-rescue => e
-	# Expected
-end
-
-puts "Fiber created"
+fiber.resume

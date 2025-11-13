@@ -1,13 +1,13 @@
 Found 2 fiber(s):
 
 Fiber #0: <T_DATA@...> → <struct rb_fiber_struct@...>
-  Status: SUSPENDED
+  Status: [state]
   Stack: <void *@...>
   VM Stack: <VALUE *@...>
   CFP: <rb_control_frame_t@...>
 
 Fiber #1: <T_DATA@...> → <struct rb_fiber_struct@...>
-  Status: RESUMED
+  Status: [state]
   Stack: <void *@...>
   VM Stack: <VALUE *@...>
   CFP: <rb_control_frame_t@...>
