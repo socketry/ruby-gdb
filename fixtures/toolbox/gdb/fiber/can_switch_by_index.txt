@@ -14,6 +14,7 @@ Warning: Fiber is TERMINATED, may not have valid saved context
 
 Switched to Fiber: <T_DATA@...> → <struct rb_fiber_struct@...>
   Status: TERMINATED
+  Exception: RuntimeError
 
 Convenience variables set:
   $fiber     = Current fiber VALUE

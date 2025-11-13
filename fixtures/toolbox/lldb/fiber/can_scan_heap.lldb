@@ -1,0 +1,15 @@
+# Test rb-fiber-scan-heap command
+
+command script import data/toolbox/init.py
+
+# Break at rb_f_puts after the fiber is created and suspended
+b rb_f_puts
+run
+
+# Now scan the heap for fibers
+# We should find at least 1 fiber (the one we created)
+script print("===TOOLBOX-OUTPUT-START===")
+rb-fiber-scan-heap 1
+script print("===TOOLBOX-OUTPUT-END===")
+
+quit

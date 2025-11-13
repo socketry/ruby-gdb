@@ -1,0 +1,12 @@
+# Test rb-stack-trace command with a fiber
+
+command script import data/toolbox/init.py
+
+# Break at rb_f_puts in the fiber
+b rb_f_puts
+run
+
+# Print the Ruby stack trace for the fiber
+rb-stack-trace
+
+quit

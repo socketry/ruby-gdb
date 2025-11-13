@@ -5,11 +5,13 @@
 
 require "open3"
 require "timeout"
+require_relative "../debugger"
 
 module Toolbox
 	module GDB
 		# Helper module for running GDB with test fixtures
 		module Fixtures
+			include Toolbox::Debugger::Fixtures
 			# Get the fixtures directory
 			def fixtures_dir
 				File.expand_path(__dir__)
@@ -165,83 +167,6 @@ module Toolbox
 						raw_output: result[:stdout]
 					}
 				end
-			end
-			
-			# Normalize output by removing non-deterministic content
-			# @param output [String] Raw output from GDB
-			# @return [String] Normalized output
-			def normalize_output(output)
-				# Extract content between markers if present
-				if output =~ /===TOOLBOX-OUTPUT-START===\n(.*?)\n===TOOLBOX-OUTPUT-END===/m
-					content = $1
-					# Normalize type tags with addresses and details: <T_TYPE@0xABCD details> -> <T_TYPE@...>
-					content = content.gsub(/<(T_\w+)@0x[0-9a-f]+([^>]*)>/, '<\1@...>')
-					# Normalize C type pointers: <void *@0xABCD details> -> <void *@...>
-					content = content.gsub(/<([A-Za-z_][\w\s*]+?)@0x[0-9a-f]+([^>]*)>/, '<\1@...>')
-					# Normalize anonymous class references: #<Class:0xABCD> -> #<Class:0x...>
-					content = content.gsub(/#<([A-Z][A-Za-z0-9_:]*):0x[0-9a-f]+>/, '#<\1:0x...>')
-					# Normalize Ruby class instances: <ClassName:0xABCD> -> <ClassName:0x...>
-					content = content.gsub(/<([A-Z][A-Za-z0-9_:]*):0x[0-9a-f]+>/, '<\1:0x...>')
-					# Normalize hex addresses in text (like "VALUE 0x123" or "saved to $heap: 0x123")
-					content = content.gsub(/\b0x[0-9a-f]+\b/, "0x...")
-					# Normalize string content (like "path/to/file" to "...")
-					# Handle escaped quotes within strings: (?:\\.|[^"]) matches either \<char> or non-quote
-					content = content.gsub(/"((?:\\.|[^"])*)"/, '"..."').gsub(/'((?:\\.|[^'])*)'/, "'...'")
-					# Normalize plain hex addresses: <0xABCD...> -> <0x...>
-					content = content.gsub(/<0x[0-9a-f]+>/, "<0x...>")
-					# Normalize plain numbers: <12345> -> <...>
-					content = content.gsub(/<\d+>/, "<...>")
-					return content.strip + "\n"
-				end
-				# Fallback to old normalization for tests without markers
-				lines = output.split("\n")
-				
-				# Normalize lines to remove non-deterministic values
-				lines.map! do |line|
-					# Replace all <0x...> address patterns with <0x...>
-					line = line.gsub(/<0x[0-9a-f]+>/, "<0x...>")
-					
-					if line.match?(/^Breakpoint \d+ at /)
-						# Keep only the meaningful part without the hex address
-						line.gsub(/^(Breakpoint \d+) at 0x[0-9a-f]+:/, '\1:')
-					elsif line.match?(/(AR Table|ST Table|Heap Array|Embedded Array|Heap Struct|Embedded Struct) at (0x[0-9a-f]+|\d+)/)
-						# Normalize memory addresses (both hex and decimal) in table/array/struct headers
-						line.gsub(/ at (?:0x[0-9a-f]+|\d+)/, " at <address>")
-					elsif line.match?(/Bignum \((embedded|heap), length \d+\)/)
-						# Normalize bignum length (varies by Ruby version)
-						line.gsub(/(Bignum \((embedded|heap), length) \d+/, '\1 ...')
-					else
-						line
-					end
-				end
-				lines.join("\n").strip + "\n"
-			end
-			
-			# Compute a simple line-by-line diff
-			# @param expected [String] Expected output
-			# @param actual [String] Actual output
-			# @return [Array<Hash>] Array of diff entries
-			def compute_diff(expected, actual)
-				expected_lines = expected.split("\n")
-				actual_lines = actual.split("\n")
-				
-				max_lines = [expected_lines.length, actual_lines.length].max
-				diff = []
-				
-				max_lines.times do |i|
-					exp_line = expected_lines[i]
-					act_line = actual_lines[i]
-					
-					if exp_line != act_line
-						diff << {
-							line: i + 1,
-							expected: exp_line,
-							actual: act_line
-						}
-					end
-				end
-				
-				diff
 			end
 		end
 	end

@@ -197,3 +197,52 @@ describe "rb-heap-scan command" do
 	end
 end
 
+describe "rb-stack-trace command" do
+	include Toolbox::LLDB::Fixtures
+	
+	# Automatically discover all test cases from stack/ subdirectory
+	Toolbox::LLDB::Fixtures.test_cases("stack") do |name, test_case|
+		it name, unique: test_case[:name] do
+			result = run_test_case(test_case, update_snapshots: ENV["UPDATE_SNAPSHOTS"])
+			
+			if result[:created]
+				# First run - snapshot was created
+				expect(result[:success?]).to be == true
+			elsif result[:updated]
+				# Snapshot was updated
+				expect(result[:success?]).to be == true
+			elsif result[:success?]
+				# Snapshot matches
+				expect(result[:match]).to be == true
+			else
+				# Snapshot mismatch - show diff
+				puts "\n" + "=" * 80
+				puts "SNAPSHOT MISMATCH: #{test_case[:name]}"
+				puts "=" * 80
+				puts "\nExpected output:"
+				puts result[:expected]
+				puts "\nActual output:"
+				puts result[:output]
+				
+				if result[:raw_output]
+					puts "\nRaw LLDB output (unfiltered):"
+					puts result[:raw_output]
+				end
+				
+				puts "\nDiff (line by line):"
+				result[:diff]&.each do |d|
+					puts "  Line #{d[:line]}:"
+					puts "    Expected: #{d[:expected].inspect}"
+					puts "    Actual:   #{d[:actual].inspect}"
+				end
+				puts "\nTo update snapshot, run:"
+				puts "  UPDATE_SNAPSHOTS=1 bundle exec sus"
+				puts "=" * 80
+				
+				expect(result[:success?]).to be == true
+			end
+		end
+	end
+end
+
+

@@ -1,10 +1,13 @@
-import gdb
-import gdb.unwinder
+import debugger
 import re
 import struct
 import json
 import os
 import sys
+
+# Import GDB unwinder only if running under GDB
+if debugger.DEBUGGER_NAME == 'gdb':
+	import gdb.unwinder
 
 # Import command parser
 import command
@@ -90,10 +93,10 @@ class RubyFiber:
         """Extract struct rb_fiber_struct* from the Fiber VALUE."""
         if self._pointer is None:
             # Cast to RTypedData and extract the data pointer
-            rtypeddata_type = gdb.lookup_type('struct RTypedData').pointer()
+            rtypeddata_type = debugger.lookup_type('struct RTypedData').pointer()
             typed_data = self.value.cast(rtypeddata_type)
             
-            rb_fiber_struct_type = gdb.lookup_type('struct rb_fiber_struct').pointer()
+            rb_fiber_struct_type = debugger.lookup_type('struct rb_fiber_struct').pointer()
             self._pointer = typed_data['data'].cast(rb_fiber_struct_type)
         
         return self._pointer
@@ -216,7 +219,7 @@ class RubyFiber:
         print(terminal.print_type_tag('rb_control_frame_t', int(self.cfp), None))
 
 
-class RubyFiberScanHeapCommand(gdb.Command):
+class RubyFiberScanHeapCommand(debugger.Command):
     """Scan heap and list all Ruby fibers.
 
     Usage: rb-fiber-scan-heap [limit] [--cache [filename]]
@@ -227,7 +230,7 @@ class RubyFiberScanHeapCommand(gdb.Command):
     """
 
     def __init__(self):
-        super(RubyFiberScanHeapCommand, self).__init__("rb-fiber-scan-heap", gdb.COMMAND_USER)
+        super(RubyFiberScanHeapCommand, self).__init__("rb-fiber-scan-heap", debugger.COMMAND_USER)
         self.heap = heap.RubyHeap()
     
     def usage(self):
@@ -285,13 +288,13 @@ class RubyFiberScanHeapCommand(gdb.Command):
                 return None
 
             # Reconstruct VALUEs from addresses
-            value_type = gdb.lookup_type('VALUE')
+            value_type = debugger.lookup_type('VALUE')
             fibers = []
             for addr in fiber_addrs:
                 try:
-                    fiber_val = gdb.Value(addr).cast(value_type)
+                    fiber_val = debugger.create_value(addr, value_type)
                     fibers.append(fiber_val)
-                except (gdb.error, gdb.MemoryError):
+                except (debugger.Error, debugger.MemoryError):
                     print(f"Warning: Could not access VALUE at 0x{addr:x}")
 
             print(f"Successfully reconstructed {len(fibers)} fiber VALUE(s)")
@@ -359,7 +362,7 @@ class RubyFiberScanHeapCommand(gdb.Command):
             return
 
         # Get fiber_data_type for matching
-        fiber_data_type = gdb.parse_and_eval('&fiber_data_type')
+        fiber_data_type = debugger.parse_and_eval('&fiber_data_type')
 
         if limit:
             print(f"Scanning heap for first {limit} Fiber object(s)...", file=sys.stderr)
@@ -431,7 +434,7 @@ class RubyFiberScanHeapCommand(gdb.Command):
         print()
 
 
-class RubyFiberScanSwitchCommand(gdb.Command):
+class RubyFiberScanSwitchCommand(debugger.Command):
     """Switch to a fiber from the scan heap cache.
 
     Usage: rb-fiber-scan-switch <index>
@@ -442,7 +445,7 @@ class RubyFiberScanSwitchCommand(gdb.Command):
     """
 
     def __init__(self):
-        super(RubyFiberScanSwitchCommand, self).__init__("rb-fiber-scan-switch", gdb.COMMAND_USER)
+        super(RubyFiberScanSwitchCommand, self).__init__("rb-fiber-scan-switch", debugger.COMMAND_USER)
     
     def usage(self):
         """Print usage information."""
@@ -487,136 +490,138 @@ class RubyFiberScanSwitchCommand(gdb.Command):
         # Delegate to rb-fiber-switch command
         # This command manages the global _current_fiber state
         try:
-            gdb.execute(f"rb-fiber-switch 0x{int(fiber_value):x}", from_tty=from_tty)
-        except gdb.error as e:
+            debugger.execute(f"rb-fiber-switch 0x{int(fiber_value):x}", from_tty=from_tty)
+        except debugger.Error as e:
             print(f"Error switching to fiber: {e}")
             import traceback
             traceback.print_exc()
 
 
-class RubyFiberUnwinder(gdb.unwinder.Unwinder):
-    """Custom unwinder for Ruby fibers.
+# GDB-specific unwinder class - only available when running under GDB
+if debugger.DEBUGGER_NAME == 'gdb':
+    class RubyFiberUnwinder(gdb.unwinder.Unwinder):
+        """Custom unwinder for Ruby fibers.
 
-    This allows GDB to unwind a fiber's stack even in a core dump,
-    by extracting saved register state from the fiber's jmp_buf.
+        This allows GDB to unwind a fiber's stack even in a core dump,
+        by extracting saved register state from the fiber's jmp_buf.
 
-    Based on similar technique from Facebook Folly:
-    https://github.com/facebook/folly/blob/main/folly/fibers/scripts/gdb.py
-    """
+        Based on similar technique from Facebook Folly:
+        https://github.com/facebook/folly/blob/main/folly/fibers/scripts/gdb.py
+        """
 
-    def __init__(self):
-        super(RubyFiberUnwinder, self).__init__("Ruby Fiber Unwinder")
-        self.active_fiber = None
-        self.unwound_first_frame = False
+        def __init__(self):
+            super(RubyFiberUnwinder, self).__init__("Ruby Fiber Unwinder")
+            self.active_fiber = None
+            self.unwound_first_frame = False
 
-    def __call__(self, pending_frame):
-        """Called by GDB when unwinding frames."""
-        # Only unwind if we have an active fiber set
-        if not self.active_fiber:
-            return None
-
-        # Only unwind the first frame, then let GDB continue normally
-        if self.unwound_first_frame:
-            return None
-
-        try:
-            # Ruby uses its own coroutine implementation, not setjmp/longjmp!
-            # Registers are saved in fiber->context.stack_pointer
-            # See coroutine/amd64/Context.S for the layout
-
-            coroutine_ctx = self.active_fiber['context']
-            stack_ptr = coroutine_ctx['stack_pointer']
-
-            # The stack_pointer points to the saved register area
-            # From Context.S (x86-64):
-            #   [stack_pointer + 0]  = R15
-            #   [stack_pointer + 8]  = R14
-            #   [stack_pointer + 16] = R13
-            #   [stack_pointer + 24] = R12
-            #   [stack_pointer + 32] = RBX
-            #   [stack_pointer + 40] = RBP
-            #   [stack_pointer + 48] = Return address (RIP)
-
-            if int(stack_ptr) == 0:
+        def __call__(self, pending_frame):
+            """Called by GDB when unwinding frames."""
+            # Only unwind if we have an active fiber set
+            if not self.active_fiber:
                 return None
 
-            # Cast to uint64 pointer to read saved registers
-            uint64_ptr = stack_ptr.cast(gdb.lookup_type('uint64_t').pointer())
-
-            # Read saved registers (keep as gdb.Value)
-            r15 = uint64_ptr[0]
-            r14 = uint64_ptr[1]
-            r13 = uint64_ptr[2]
-            r12 = uint64_ptr[3]
-            rbx = uint64_ptr[4]
-            rbp = uint64_ptr[5]
-
-            # After coroutine_transfer executes 'addq $48, %rsp', RSP points to the return address
-            # After 'ret' pops the return address, RSP = stack_ptr + 48 + 8
-            # We want to create an unwind frame AS IF we're in the caller of coroutine_transfer
-            # So RSP should be pointing AFTER the return address was popped
-            rsp_value = int(stack_ptr) + 48 + 8
-            rsp = gdb.Value(rsp_value).cast(gdb.lookup_type('uint64_t'))
-
-            # The return address (RIP) is at [stack_ptr + 48]
-            # This is what 'ret' will pop and jump to
-            rip_ptr = gdb.Value(int(stack_ptr) + 48).cast(gdb.lookup_type('uint64_t').pointer())
-            rip = rip_ptr.dereference()
-
-            # Sanity check
-            if int(rsp) == 0 or int(rip) == 0:
+            # Only unwind the first frame, then let GDB continue normally
+            if self.unwound_first_frame:
                 return None
 
-            # Create frame ID
-            frame_id = gdb.unwinder.FrameId(int(rsp), int(rip))
+            try:
+                # Ruby uses its own coroutine implementation, not setjmp/longjmp!
+                # Registers are saved in fiber->context.stack_pointer
+                # See coroutine/amd64/Context.S for the layout
 
-            # Create unwind info
-            unwind_info = pending_frame.create_unwind_info(frame_id)
+                coroutine_ctx = self.active_fiber['context']
+                stack_ptr = coroutine_ctx['stack_pointer']
 
-            # Add saved registers
-            unwind_info.add_saved_register("rip", rip)
-            unwind_info.add_saved_register("rsp", rsp)
-            unwind_info.add_saved_register("rbp", rbp)
-            unwind_info.add_saved_register("rbx", rbx)
-            unwind_info.add_saved_register("r12", r12)
-            unwind_info.add_saved_register("r13", r13)
-            unwind_info.add_saved_register("r14", r14)
-            unwind_info.add_saved_register("r15", r15)
+                # The stack_pointer points to the saved register area
+                # From Context.S (x86-64):
+                #   [stack_pointer + 0]  = R15
+                #   [stack_pointer + 8]  = R14
+                #   [stack_pointer + 16] = R13
+                #   [stack_pointer + 24] = R12
+                #   [stack_pointer + 32] = RBX
+                #   [stack_pointer + 40] = RBP
+                #   [stack_pointer + 48] = Return address (RIP)
 
-            # Mark that we've unwound the first frame
-            self.unwound_first_frame = True
+                if int(stack_ptr) == 0:
+                    return None
 
-            return unwind_info
+                # Cast to uint64 pointer to read saved registers
+                uint64_ptr = stack_ptr.cast(gdb.lookup_type('uint64_t').pointer())
 
-        except (gdb.error, gdb.MemoryError) as e:
-            # If we can't read the fiber context, bail
-            return None
+                # Read saved registers (keep as gdb.Value)
+                r15 = uint64_ptr[0]
+                r14 = uint64_ptr[1]
+                r13 = uint64_ptr[2]
+                r12 = uint64_ptr[3]
+                rbx = uint64_ptr[4]
+                rbp = uint64_ptr[5]
 
-    def activate_fiber(self, fiber):
-        """Activate unwinding for a specific fiber."""
-        self.active_fiber = fiber
-        self.unwound_first_frame = False
-        gdb.invalidate_cached_frames()
+                # After coroutine_transfer executes 'addq $48, %rsp', RSP points to the return address
+                # After 'ret' pops the return address, RSP = stack_ptr + 48 + 8
+                # We want to create an unwind frame AS IF we're in the caller of coroutine_transfer
+                # So RSP should be pointing AFTER the return address was popped
+                rsp_value = int(stack_ptr) + 48 + 8
+                rsp = gdb.Value(rsp_value).cast(gdb.lookup_type('uint64_t'))
 
-    def deactivate(self):
-        """Deactivate fiber unwinding."""
-        self.active_fiber = None
-        self.unwound_first_frame = False
-        gdb.invalidate_cached_frames()
+                # The return address (RIP) is at [stack_ptr + 48]
+                # This is what 'ret' will pop and jump to
+                rip_ptr = gdb.Value(int(stack_ptr) + 48).cast(gdb.lookup_type('uint64_t').pointer())
+                rip = rip_ptr.dereference()
+
+                # Sanity check
+                if int(rsp) == 0 or int(rip) == 0:
+                    return None
+
+                # Create frame ID
+                frame_id = gdb.unwinder.FrameId(int(rsp), int(rip))
+
+                # Create unwind info
+                unwind_info = pending_frame.create_unwind_info(frame_id)
+
+                # Add saved registers
+                unwind_info.add_saved_register("rip", rip)
+                unwind_info.add_saved_register("rsp", rsp)
+                unwind_info.add_saved_register("rbp", rbp)
+                unwind_info.add_saved_register("rbx", rbx)
+                unwind_info.add_saved_register("r12", r12)
+                unwind_info.add_saved_register("r13", r13)
+                unwind_info.add_saved_register("r14", r14)
+                unwind_info.add_saved_register("r15", r15)
+
+                # Mark that we've unwound the first frame
+                self.unwound_first_frame = True
+
+                return unwind_info
+
+            except (gdb.error, gdb.MemoryError) as e:
+                # If we can't read the fiber context, bail
+                return None
+
+        def activate_fiber(self, fiber):
+            """Activate unwinding for a specific fiber."""
+            self.active_fiber = fiber
+            self.unwound_first_frame = False
+            gdb.invalidate_cached_frames()
+
+        def deactivate(self):
+            """Deactivate fiber unwinding."""
+            self.active_fiber = None
+            self.unwound_first_frame = False
+            gdb.invalidate_cached_frames()
 
 
-class RubyFiberSwitchCommand(gdb.Command):
-    """Switch GDB's stack view to a specific fiber.
+class RubyFiberSwitchCommand(debugger.Command):
+    """Switch debugger's stack view to a specific fiber.
 
     Usage: rb-fiber-switch <fiber_value_or_address>
            rb-fiber-switch off
 
     Examples: 
         rb-fiber-switch 0x7fffdc409ca8    # VALUE address
-        rb-fiber-switch $fiber_val         # GDB variable
-        rb-fiber-switch off                # Deactivate unwinder
+        rb-fiber-switch $fiber_val         # Debugger variable
+        rb-fiber-switch off                # Deactivate unwinder (GDB only)
 
-    This uses a custom unwinder to make GDB follow the fiber's saved
+    This uses a custom unwinder (GDB only) to make the debugger follow the fiber's saved
     stack, allowing you to use 'bt', 'up', 'down', 'frame', etc.
     Works even with core dumps!
 
@@ -624,8 +629,9 @@ class RubyFiberSwitchCommand(gdb.Command):
     """
 
     def __init__(self):
-        super(RubyFiberSwitchCommand, self).__init__("rb-fiber-switch", gdb.COMMAND_USER)
-        self._ensure_unwinder()
+        super(RubyFiberSwitchCommand, self).__init__("rb-fiber-switch", debugger.COMMAND_USER)
+        if debugger.DEBUGGER_NAME == 'gdb':
+            self._ensure_unwinder()
     
     def usage(self):
         """Print usage information."""
@@ -633,13 +639,15 @@ class RubyFiberSwitchCommand(gdb.Command):
         print("       rb-fiber-switch off")
         print("Examples:")
         print("  rb-fiber-switch 0x7fffdc409ca8    # VALUE address")
-        print("  rb-fiber-switch $fiber             # GDB variable")
-        print("  rb-fiber-switch off                # Deactivate unwinder")
+        print("  rb-fiber-switch $fiber             # Debugger variable")
+        print("  rb-fiber-switch off                # Deactivate unwinder (GDB only)")
         print()
         print("After switching, you can use: bt, up, down, frame, info locals, etc.")
+        if debugger.DEBUGGER_NAME != 'gdb':
+            print("Note: Stack unwinding is only supported in GDB")
 
     def _ensure_unwinder(self):
-        """Ensure the fiber unwinder is registered."""
+        """Ensure the fiber unwinder is registered (GDB only)."""
         global _fiber_unwinder
         if _fiber_unwinder is None:
             _fiber_unwinder = RubyFiberUnwinder()
@@ -654,7 +662,8 @@ class RubyFiberSwitchCommand(gdb.Command):
 
         # Check for deactivate
         if arg and arg.lower() in ('off', 'none', 'deactivate'):
-            _fiber_unwinder.deactivate()
+            if debugger.DEBUGGER_NAME == 'gdb' and _fiber_unwinder:
+                _fiber_unwinder.deactivate()
             set_current_fiber(None)
             print("Fiber unwinder deactivated. Switched back to normal stack view.")
             print("Try: bt")
@@ -663,12 +672,12 @@ class RubyFiberSwitchCommand(gdb.Command):
         # Parse the argument as a VALUE
         try:
             # Evaluate the expression to get a VALUE
-            fiber_value = gdb.parse_and_eval(arg)
+            fiber_value = debugger.parse_and_eval(arg)
             
             # Ensure it's cast to VALUE type
             try:
-                value_type = gdb.lookup_type('VALUE')
-            except gdb.error as lookup_err:
+                value_type = debugger.lookup_type('VALUE')
+            except debugger.Error as lookup_err:
                 print(f"Error: Could not lookup type 'VALUE': {lookup_err}")
                 print("This usually means Ruby symbols aren't fully loaded yet.")
                 print(f"Try running the process further or checking symbol loading.")
@@ -676,7 +685,7 @@ class RubyFiberSwitchCommand(gdb.Command):
             
             fiber_value = fiber_value.cast(value_type)
             
-        except (gdb.error, RuntimeError) as e:
+        except (debugger.Error, RuntimeError) as e:
             print(f"Error: Could not evaluate '{arg}' as a VALUE")
             print(f"Details: {e}")
             import traceback
@@ -706,21 +715,22 @@ class RubyFiberSwitchCommand(gdb.Command):
         # Get the fiber pointer for unwinder
         fiber_ptr = fiber_obj.pointer
 
-        # Activate the unwinder for this fiber
-        _fiber_unwinder.activate_fiber(fiber_ptr)
+        # Activate the unwinder for this fiber (GDB only)
+        if debugger.DEBUGGER_NAME == 'gdb' and _fiber_unwinder:
+            _fiber_unwinder.activate_fiber(fiber_ptr)
 
         # Set convenience variables for the fiber context
         ec = fiber_ptr['cont']['saved_ec'].address
-        gdb.set_convenience_variable('fiber', fiber_value)
-        gdb.set_convenience_variable('fiber_ptr', fiber_ptr)
-        gdb.set_convenience_variable('ec', ec)
+        debugger.set_convenience_variable('fiber', fiber_value)
+        debugger.set_convenience_variable('fiber_ptr', fiber_ptr)
+        debugger.set_convenience_variable('ec', ec)
 
         # Set errinfo if present (check for real object, not special constant)
         errinfo_val = ec['errinfo']
         errinfo_int = int(errinfo_val)
         is_special = (errinfo_int & 0x03) != 0 or errinfo_int == 0
         if not is_special:
-            gdb.set_convenience_variable('errinfo', errinfo_val)
+            debugger.set_convenience_variable('errinfo', errinfo_val)
 
         # Create terminal for formatting
         terminal = format.create_terminal(from_tty)
@@ -743,6 +753,8 @@ class RubyFiberSwitchCommand(gdb.Command):
         print()
 
         # Set tag retval if present
+        tag = None
+        is_retval_special = True
         try:
             tag = ec['tag']
             if int(tag) != 0:
@@ -751,7 +763,7 @@ class RubyFiberSwitchCommand(gdb.Command):
                 retval_int = int(tag_retval)
                 is_retval_special = (retval_int & 0x03) != 0 or retval_int == 0
                 if not is_retval_special:
-                    gdb.set_convenience_variable('retval', tag_retval)
+                    debugger.set_convenience_variable('retval', tag_retval)
         except:
             tag = None
             is_retval_special = True
@@ -788,7 +800,7 @@ class RubyFiberSwitchCommand(gdb.Command):
         print("  rb-fiber-switch off")
 
 
-class RubyFiberScanStackTraceAllCommand(gdb.Command):
+class RubyFiberScanStackTraceAllCommand(debugger.Command):
     """Print stack traces for all fibers in the scan cache.
 
     Usage: rb-fiber-scan-stack-trace-all
@@ -799,7 +811,7 @@ class RubyFiberScanStackTraceAllCommand(gdb.Command):
     """
 
     def __init__(self):
-        super(RubyFiberScanStackTraceAllCommand, self).__init__("rb-fiber-scan-stack-trace-all", gdb.COMMAND_USER)
+        super(RubyFiberScanStackTraceAllCommand, self).__init__("rb-fiber-scan-stack-trace-all", debugger.COMMAND_USER)
     
     def usage(self):
         """Print usage information."""

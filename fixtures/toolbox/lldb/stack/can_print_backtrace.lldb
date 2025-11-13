@@ -1,0 +1,12 @@
+# Test rb-stack-trace command
+
+command script import data/toolbox/init.py
+
+# Break at rb_f_puts in inner_method
+b rb_f_puts
+run
+
+# Print the Ruby stack trace
+rb-stack-trace
+
+quit

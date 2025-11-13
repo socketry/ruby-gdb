@@ -61,6 +61,70 @@ class Value:
 		"""
 		return hash(self._value.GetValueAsUnsigned())
 	
+	def __lt__(self, other):
+		"""Less than comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, lldb.SBValue, or integer
+		
+		Returns:
+			True if this value is less than other
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() < other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() < other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() < int(other)
+	
+	def __le__(self, other):
+		"""Less than or equal comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, lldb.SBValue, or integer
+		
+		Returns:
+			True if this value is less than or equal to other
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() <= other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() <= other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() <= int(other)
+	
+	def __gt__(self, other):
+		"""Greater than comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, lldb.SBValue, or integer
+		
+		Returns:
+			True if this value is greater than other
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() > other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() > other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() > int(other)
+	
+	def __ge__(self, other):
+		"""Greater than or equal comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, lldb.SBValue, or integer
+		
+		Returns:
+			True if this value is greater than or equal to other
+		"""
+		if isinstance(other, Value):
+			return self._value.GetValueAsUnsigned() >= other._value.GetValueAsUnsigned()
+		elif isinstance(other, lldb.SBValue):
+			return self._value.GetValueAsUnsigned() >= other.GetValueAsUnsigned()
+		else:
+			return self._value.GetValueAsUnsigned() >= int(other)
+	
 	def cast(self, type_obj):
 		"""Cast this value to a different type.
 		
@@ -105,39 +169,60 @@ class Value:
 		if isinstance(key, str):
 			return Value(self._value.GetChildMemberWithName(key))
 		else:
-			# For integer index: check if this is a pointer type
-			# If so, use pointer arithmetic instead of GetChildAtIndex
+			# For integer index: check if this is a pointer type or array type
+			# Both need pointer-style arithmetic (arrays for flexible array members)
 			type_obj = self._value.GetType()
-			if type_obj.IsPointerType():
-				# Pointer arithmetic: dereference and offset
-				# offset the pointer, then dereference
-				pointee_type = type_obj.GetPointeeType()
-				type_size = pointee_type.GetByteSize()
-				new_addr = self._value.GetValueAsUnsigned() + (key * type_size)
+			if type_obj.IsPointerType() or type_obj.IsArrayType():
+				# For arrays, treat the array address as a pointer to the element type
+				if type_obj.IsArrayType():
+					# Get the element type from the array
+					element_type = type_obj.GetArrayElementType()
+					# The address of the array IS the address of the first element
+					base_addr = self._value.GetLoadAddress()
+				else:
+					# For pointers, get the pointee type and dereference
+					element_type = type_obj.GetPointeeType()
+					base_addr = self._value.GetValueAsUnsigned()
 				
-				# Create a new value at the calculated address
+				type_size = element_type.GetByteSize()
+				new_addr = base_addr + (key * type_size)
+				
+				# Optimization: if element type is a pointer, we can use CreateValueFromAddress
+				# which is much faster than reading memory and creating SBData
 				target = lldb.debugger.GetSelectedTarget()
-				process = target.GetProcess()
-				error = lldb.SBError()
-				
-				# Read the value from memory
-				data = process.ReadMemory(new_addr, type_size, error)
-				if error.Fail():
-					raise MemoryError(f"Failed to read memory at 0x{new_addr:x}: {error.GetCString()}")
-				
-				# Create an SBData from the bytes
-				sb_data = lldb.SBData()
-				sb_data.SetData(error, data, target.GetByteOrder(), pointee_type.GetByteSize())
-				
-				# Create a value from the data
-				result = target.CreateValueFromData(
-					f"element_{key}",
-					sb_data,
-					pointee_type
-				)
-				return Value(result)
+				if element_type.IsPointerType():
+					# Fast path for pointer arrays: use CreateValueFromAddress
+					# CreateValueFromAddress needs an SBAddress
+					sb_addr = lldb.SBAddress(new_addr, target)
+					result = target.CreateValueFromAddress(
+						f"element_{key}",
+						sb_addr,
+						element_type
+					)
+					return Value(result)
+				else:
+					# Slow path for struct/primitive arrays: read memory
+					process = target.GetProcess()
+					error = lldb.SBError()
+					
+					# Read the value from memory
+					data = process.ReadMemory(new_addr, type_size, error)
+					if error.Fail():
+						raise MemoryError(f"Failed to read memory at 0x{new_addr:x}: {error.GetCString()}")
+					
+					# Create an SBData from the bytes
+					sb_data = lldb.SBData()
+					sb_data.SetData(error, data, target.GetByteOrder(), element_type.GetByteSize())
+					
+					# Create a value from the data
+					result = target.CreateValueFromData(
+						f"element_{key}",
+						sb_data,
+						element_type
+					)
+					return Value(result)
 			else:
-				# For array types or structs, use GetChildAtIndex
+				# For structs, use GetChildAtIndex
 				return Value(self._value.GetChildAtIndex(key))
 	
 	def __add__(self, offset):
@@ -154,14 +239,41 @@ class Value:
 		type_size = self._value.GetType().GetPointeeType().GetByteSize()
 		new_addr = self._value.GetValueAsUnsigned() + (offset * type_size)
 		
-		# Create a new value at the calculated address
+		# Create a new pointer value using CreateValueFromExpression
 		target = lldb.debugger.GetSelectedTarget()
-		addr_value = target.CreateValueFromAddress(
+		addr_value = target.CreateValueFromExpression(
 			"temp", 
-			lldb.SBAddress(new_addr, target),
-			self._value.GetType()
+			f"({self._value.GetType().GetName()})0x{new_addr:x}"
 		)
 		return Value(addr_value)
+	
+	def __sub__(self, offset):
+		"""Pointer arithmetic: subtract offset.
+		
+		Args:
+			offset: Integer offset to subtract (or another Value for pointer difference)
+		
+		Returns:
+			New Value with adjusted pointer, or integer difference if subtracting pointers
+		"""
+		if isinstance(offset, (Value, type(self._value))):
+			# Subtracting two pointers - return the difference in elements
+			other_value = offset if isinstance(offset, Value) else Value(offset)
+			type_size = self._value.GetType().GetPointeeType().GetByteSize()
+			addr_diff = self._value.GetValueAsUnsigned() - other_value._value.GetValueAsUnsigned()
+			return addr_diff // type_size
+		else:
+			# Subtracting integer offset from pointer
+			type_size = self._value.GetType().GetPointeeType().GetByteSize()
+			new_addr = self._value.GetValueAsUnsigned() - (offset * type_size)
+			
+			# Create a new pointer value using CreateValueFromExpression
+			target = lldb.debugger.GetSelectedTarget()
+			addr_value = target.CreateValueFromExpression(
+				"temp", 
+				f"({self._value.GetType().GetName()})0x{new_addr:x}"
+			)
+			return Value(addr_value)
 	
 	@property
 	def type(self):
@@ -506,12 +618,14 @@ def create_value(address, value_type):
 		if hasattr(address, '__int__'):
 			address = int(address)
 		
-		# In LLDB, create a value from an address with a type
+		# In LLDB, use CreateValueFromExpression to cast an address to a type
+		# CreateValueFromAddress doesn't work correctly for heap addresses
 		target = lldb.debugger.GetSelectedTarget()
-		addr_value = target.CreateValueFromAddress(
+		type_name = value_type.GetName()
+		expr = f"({type_name})0x{address:x}"
+		addr_value = target.CreateValueFromExpression(
 			f"addr_0x{address:x}",
-			lldb.SBAddress(address, target),
-			value_type
+			expr
 		)
 		
 		return Value(addr_value)
