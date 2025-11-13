@@ -58,6 +58,70 @@ class Value:
 		"""
 		return hash(int(self._value))
 	
+	def __lt__(self, other):
+		"""Less than comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, gdb.Value, or integer
+		
+		Returns:
+			True if this value is less than other
+		"""
+		if isinstance(other, Value):
+			return int(self._value) < int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) < int(other)
+		else:
+			return int(self._value) < int(other)
+	
+	def __le__(self, other):
+		"""Less than or equal comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, gdb.Value, or integer
+		
+		Returns:
+			True if this value is less than or equal to other
+		"""
+		if isinstance(other, Value):
+			return int(self._value) <= int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) <= int(other)
+		else:
+			return int(self._value) <= int(other)
+	
+	def __gt__(self, other):
+		"""Greater than comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, gdb.Value, or integer
+		
+		Returns:
+			True if this value is greater than other
+		"""
+		if isinstance(other, Value):
+			return int(self._value) > int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) > int(other)
+		else:
+			return int(self._value) > int(other)
+	
+	def __ge__(self, other):
+		"""Greater than or equal comparison for pointer ordering.
+		
+		Args:
+			other: Another Value, gdb.Value, or integer
+		
+		Returns:
+			True if this value is greater than or equal to other
+		"""
+		if isinstance(other, Value):
+			return int(self._value) >= int(other._value)
+		elif isinstance(other, gdb.Value):
+			return int(self._value) >= int(other)
+		else:
+			return int(self._value) >= int(other)
+	
 	def cast(self, type_obj):
 		"""Cast this value to a different type.
 		
@@ -106,20 +170,20 @@ class Value:
 			return None
 	
 	def __add__(self, other):
-		"""Add to this value.
+		"""Add to this value (pointer arithmetic).
 		
 		Args:
 			other: Value, gdb.Value, or integer to add
 		
 		Returns:
-			Integer result of addition
+			Value result of addition
 		"""
 		if isinstance(other, Value):
-			return int(self._value) + int(other._value)
+			return Value(self._value + other._value)
 		elif isinstance(other, gdb.Value):
-			return int(self._value) + int(other)
+			return Value(self._value + other)
 		else:
-			return int(self._value) + int(other)
+			return Value(self._value + other)
 	
 	def __radd__(self, other):
 		"""Reverse add - when Value is on the right side of +.
@@ -133,20 +197,20 @@ class Value:
 		return self.__add__(other)
 	
 	def __sub__(self, other):
-		"""Subtract from this value.
+		"""Subtract from this value (pointer arithmetic).
 		
 		Args:
 			other: Value, gdb.Value, or integer to subtract
 		
 		Returns:
-			Integer result of subtraction
+			Value result of subtraction
 		"""
 		if isinstance(other, Value):
-			return int(self._value) - int(other._value)
+			return Value(self._value - other._value)
 		elif isinstance(other, gdb.Value):
-			return int(self._value) - int(other)
+			return Value(self._value - other)
 		else:
-			return int(self._value) - int(other)
+			return Value(self._value - other)
 	
 	def __rsub__(self, other):
 		"""Reverse subtract - when Value is on the right side of -.
@@ -226,6 +290,15 @@ class Type:
 			gdb.Type object
 		"""
 		return self._type
+	
+	@property
+	def sizeof(self):
+		"""Get the size of this type in bytes.
+		
+		Returns:
+			Size in bytes as integer
+		"""
+		return self._type.sizeof
 
 
 class Command:
@@ -317,6 +390,22 @@ def execute(command, from_tty=False, to_string=False):
 		String output if to_string=True, None otherwise
 	"""
 	return gdb.execute(command, from_tty=from_tty, to_string=to_string)
+
+
+def lookup_symbol(address):
+	"""Look up symbol name for an address.
+	
+	Args:
+		address: Memory address (as integer)
+	
+	Returns:
+		Symbol name string, or None if no symbol found
+	"""
+	try:
+		symbol_info = execute(f"info symbol 0x{address:x}", to_string=True)
+		return symbol_info.split()[0]
+	except:
+		return None
 
 
 def invalidate_cached_frames():

@@ -400,6 +400,15 @@ class Type:
 			lldb.SBType object
 		"""
 		return self._type
+	
+	@property
+	def sizeof(self):
+		"""Get the size of this type in bytes.
+		
+		Returns:
+			Size in bytes as integer
+		"""
+		return self._type.GetByteSize()
 
 
 # Global registry of LLDB command wrappers
@@ -571,6 +580,40 @@ def execute(command, from_tty=False, to_string=False):
 	if to_string:
 		return result.GetOutput()
 	return None
+
+
+def lookup_symbol(address):
+	"""Look up symbol name for an address.
+	
+	Args:
+		address: Memory address (as integer)
+	
+	Returns:
+		Symbol name string, or None if no symbol found
+	"""
+	try:
+		symbol_info = execute(f"image lookup -a 0x{address:x}", to_string=True)
+		# LLDB output format: "Summary: module`symbol_name at file:line"
+		# or "Symbol: ... name = "symbol_name""
+		for line in symbol_info.split('\n'):
+			if 'Summary:' in line:
+				# Extract symbol from "Summary: ruby`rb_f_puts at io.c:8997:1"
+				if '`' in line:
+					start = line.index('`') + 1
+					# Symbol ends at ' at ' or end of line
+					if ' at ' in line[start:]:
+						end = start + line[start:].index(' at ')
+					else:
+						end = len(line)
+					return line[start:end].strip()
+			elif 'Symbol:' in line and 'name = "' in line:
+				# Alternative format
+				start = line.index('name = "') + 8
+				end = line.index('"', start)
+				return line[start:end]
+		return None
+	except:
+		return None
 
 
 def invalidate_cached_frames():

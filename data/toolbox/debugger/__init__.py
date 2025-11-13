@@ -62,6 +62,7 @@ parse_and_eval = _backend.parse_and_eval
 lookup_type = _backend.lookup_type
 set_convenience_variable = _backend.set_convenience_variable
 execute = _backend.execute
+lookup_symbol = _backend.lookup_symbol
 invalidate_cached_frames = _backend.invalidate_cached_frames
 get_enum_value = _backend.get_enum_value
 read_memory = _backend.read_memory
@@ -85,6 +86,7 @@ __all__ = [
 	'lookup_type',
 	'set_convenience_variable',
 	'execute',
+	'lookup_symbol',
 	'invalidate_cached_frames',
 	'get_enum_value',
 	'read_memory',

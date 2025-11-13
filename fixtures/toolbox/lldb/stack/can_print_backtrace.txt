@@ -1,6 +1,6 @@
 Stack trace for current thread:
 
-  #0: [C function (0x...)]
+  #0: [C function (rb_f_puts)]
   #1: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:6:in "..."
   #2: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:11:in "..."
   #3: [...]/fixtures/toolbox/lldb/stack/can_print_backtrace.rb:15:in "..."

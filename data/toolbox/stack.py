@@ -150,7 +150,7 @@ class RubyStackPrinter:
         """
         iseq = cfp['iseq']
         
-        if int(iseq) == 0:
+        if iseq is None or int(iseq) == 0:
             # C function frame - try to extract method info from EP
             try:
                 ep = cfp['ep']
@@ -174,11 +174,10 @@ class RubyStackPrinter:
                             
                             # Try to get symbol for the C function
                             func_addr = int(cfunc)
-                            func_name = ""
-                            try:
-                                symbol_info = debugger.execute(f"info symbol 0x{func_addr:x}", to_string=True)
-                                func_name = f" ({symbol_info.split()[0]})"
-                            except:
+                            func_name = debugger.lookup_symbol(func_addr)
+                            if func_name:
+                                func_name = f" ({func_name})"
+                            else:
                                 func_name = f" (0x{func_addr:x})"
                             
                             # Print C frame with cyan/dimmed formatting
@@ -237,7 +236,24 @@ class RubyStackPrinter:
         
         try:
             # Get location information
-            location = iseq['body']['location']
+            body = iseq['body']
+            if body is None:
+                print(self.terminal.print(
+                    format.metadata, f"  #{depth}: ",
+                    format.error, "???:???:in '???'",
+                    format.reset
+                ))
+                return
+                
+            location = body['location']
+            if location is None:
+                print(self.terminal.print(
+                    format.metadata, f"  #{depth}: ",
+                    format.error, "???:???:in '???'",
+                    format.reset
+                ))
+                return
+                
             pathobj = location['pathobj']
             label = location['label']
             
