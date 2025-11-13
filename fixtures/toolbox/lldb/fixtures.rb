@@ -3,14 +3,12 @@
 # Released under the MIT License.
 # Copyright, 2025, by Samuel Williams.
 
-require "fileutils"
-require "open3"
-require_relative "../debugger"
+require_relative "../fixtures"
 
 module Toolbox
 	module LLDB
 		module Fixtures
-			include Toolbox::Debugger::Fixtures
+			include Toolbox::Fixtures
 			# Discover test cases from a subdirectory
 			# @param subdir [String] Subdirectory name (e.g., "object", "fiber", "heap")
 			# @yield [name, test_case] Block to call for each test case

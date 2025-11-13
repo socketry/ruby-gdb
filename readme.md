@@ -6,25 +6,25 @@ Ruby debugging toolbox for GDB and LLDB, providing commands for inspecting Ruby 
 
 ## Features
 
-- **Multi-debugger support**: Works with both GDB and LLDB through a unified abstraction layer
-- **Object inspection**: Pretty-print Ruby objects, hashes, arrays, and complex structures
-- **Fiber debugging**: Navigate and inspect Ruby fibers with full backtraces
-- **Heap scanning**: Search the Ruby heap for objects and diagnose memory issues
-- **Stack inspection**: Examine both Ruby VM stacks and native C stacks
-- **Easy installation**: Simple bake tasks for both GDB and LLDB
+  - **Multi-debugger support**: Works with both GDB and LLDB through a unified abstraction layer
+  - **Object inspection**: Pretty-print Ruby objects, hashes, arrays, and complex structures
+  - **Fiber debugging**: Navigate and inspect Ruby fibers with full backtraces
+  - **Heap scanning**: Search the Ruby heap for objects and diagnose memory issues
+  - **Stack inspection**: Examine both Ruby VM stacks and native C stacks
+  - **Easy installation**: Simple bake tasks for both GDB and LLDB
 
 ## Installation
 
 ### For GDB
 
-```bash
+``` bash
 gem install toolbox
 bake toolbox:gdb:install
 ```
 
 ### For LLDB
 
-```bash
+``` bash
 gem install toolbox
 bake toolbox:lldb:install
 ```

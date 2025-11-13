@@ -3,15 +3,13 @@
 # Released under the MIT License.
 # Copyright, 2025, by Samuel Williams.
 
-require "open3"
-require "timeout"
-require_relative "../debugger"
+require_relative "../fixtures"
 
 module Toolbox
 	module GDB
 		# Helper module for running GDB with test fixtures
 		module Fixtures
-			include Toolbox::Debugger::Fixtures
+			include Toolbox::Fixtures
 			# Get the fixtures directory
 			def fixtures_dir
 				File.expand_path(__dir__)
