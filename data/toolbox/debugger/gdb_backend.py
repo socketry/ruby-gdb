@@ -215,14 +215,18 @@ def set_convenience_variable(name, value):
 		gdb.set_convenience_variable(name, value)
 
 
-def execute(command, from_tty=False):
+def execute(command, from_tty=False, to_string=False):
 	"""Execute a debugger command.
 	
 	Args:
 		command: Command string to execute
 		from_tty: Whether command is from terminal
+		to_string: If True, return command output as string
+	
+	Returns:
+		String output if to_string=True, None otherwise
 	"""
-	gdb.execute(command, from_tty=from_tty)
+	return gdb.execute(command, from_tty=from_tty, to_string=to_string)
 
 
 def invalidate_cached_frames():
@@ -251,4 +255,93 @@ def get_enum_value(enum_name, member_name):
 	"""
 	# GDB imports enum members globally, so just evaluate the name
 	return int(gdb.parse_and_eval(member_name))
+
+
+def read_memory(address, size):
+	"""Read memory from the debugged process.
+	
+	Args:
+		address: Memory address (as integer or pointer value)
+		size: Number of bytes to read
+	
+	Returns:
+		bytes object containing the memory contents
+	
+	Raises:
+		MemoryError: If memory cannot be read
+	"""
+	# Convert to integer address if needed
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	try:
+		inferior = gdb.selected_inferior()
+		return inferior.read_memory(address, size).tobytes()
+	except gdb.MemoryError as e:
+		raise MemoryError(f"Cannot read {size} bytes at 0x{address:x}: {e}")
+
+
+def read_cstring(address, max_length=256):
+	"""Read a NUL-terminated C string from memory.
+	
+	Args:
+		address: Memory address (as integer or pointer value)
+		max_length: Maximum bytes to read before giving up
+	
+	Returns:
+		Tuple of (bytes, actual_length) where actual_length is the string
+		length not including the NUL terminator
+	
+	Raises:
+		MemoryError: If memory cannot be read
+	"""
+	# Convert to integer address if needed
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	try:
+		inferior = gdb.selected_inferior()
+		buffer = inferior.read_memory(address, max_length).tobytes()
+		n = buffer.find(b'\x00')
+		if n == -1:
+			n = max_length
+		return (buffer[:n], n)
+	except gdb.MemoryError as e:
+		raise MemoryError(f"Cannot read memory at 0x{address:x}: {e}")
+
+
+def create_value(address, value_type):
+	"""Create a typed Value from a memory address.
+	
+	Args:
+		address: Memory address (as integer, pointer value, or gdb.Value)
+		value_type: Type object (or native gdb.Type) to cast to
+	
+	Returns:
+		Value object representing the typed value at that address
+	
+	Examples:
+		>>> rbasic_type = debugger.lookup_type('struct RBasic').pointer()
+		>>> obj = debugger.create_value(0x7fff12345678, rbasic_type)
+	"""
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	# Handle different address types
+	if isinstance(address, Value):
+		# It's already a wrapped Value, get the native value
+		address = address._value
+	elif isinstance(address, gdb.Value):
+		# It's a native gdb.Value, use it directly
+		pass
+	else:
+		# Convert to integer address if needed
+		if hasattr(address, '__int__'):
+			address = int(address)
+		# Create a gdb.Value from the integer
+		address = gdb.Value(address)
+	
+	return Value(address.cast(value_type))
+
 

@@ -1,6 +1,6 @@
 """Stack inspection commands for Ruby processes."""
 
-import gdb
+import debugger
 import sys
 
 # Import Ruby GDB modules
@@ -52,13 +52,13 @@ class RubyStackPrinter:
     def _initialize_types(self):
         """Initialize cached type lookups."""
         if self._rbasic_type is None:
-            self._rbasic_type = gdb.lookup_type('struct RBasic').pointer()
+            self._rbasic_type = debugger.lookup_type('struct RBasic').pointer()
         if self._value_type is None:
-            self._value_type = gdb.lookup_type('VALUE')
+            self._value_type = debugger.lookup_type('VALUE')
         if self._cfp_type is None:
-            self._cfp_type = gdb.lookup_type('rb_control_frame_t').pointer()
+            self._cfp_type = debugger.lookup_type('rb_control_frame_t').pointer()
         if self._rstring_type is None:
-            self._rstring_type = gdb.lookup_type('struct RString').pointer()
+            self._rstring_type = debugger.lookup_type('struct RString').pointer()
     
     def print_fiber_backtrace(self, fiber_ptr, from_tty=True):
         """Print backtrace for a Ruby fiber.
@@ -77,7 +77,7 @@ class RubyStackPrinter:
             print(f"Backtrace for fiber {fiber_ptr}:")
             self.print_backtrace(ec, from_tty)
             
-        except (gdb.error, RuntimeError) as e:
+        except (debugger.Error, RuntimeError) as e:
             print(f"Error printing fiber backtrace: {e}")
     
     def print_backtrace(self, ec, from_tty=True):
@@ -107,7 +107,7 @@ class RubyStackPrinter:
                     exc_msg = self._get_exception_message(errinfo_val)
                     
                     # Set as GDB convenience variable for manual inspection
-                    gdb.set_convenience_variable('errinfo', errinfo_val)
+                    debugger.set_convenience_variable('errinfo', errinfo_val)
                     
                     if exc_msg:
                         print(f"Currently handling: {exc_class}: {exc_msg} (VALUE: 0x{errinfo_int:x}, $errinfo)")
@@ -116,7 +116,7 @@ class RubyStackPrinter:
                     print()
                 except:
                     # Set convenience variable even if we can't decode
-                    gdb.set_convenience_variable('errinfo', errinfo_val)
+                    debugger.set_convenience_variable('errinfo', errinfo_val)
                     print(f"Currently handling exception (VALUE: 0x{errinfo_int:x}, $errinfo)")
                     print()
             
@@ -131,14 +131,14 @@ class RubyStackPrinter:
                     self._print_frame(current_cfp, frame_num)
                     frame_num += 1
                     current_cfp += 1
-                except (gdb.error, RuntimeError) as e:
+                except (debugger.Error, RuntimeError) as e:
                     print(f"  #{frame_num}: [error reading frame: {e}]")
                     break
             
             if frame_num == 0:
                 print("  (no frames)")
                 
-        except (gdb.error, RuntimeError) as e:
+        except (debugger.Error, RuntimeError) as e:
             print(f"Error printing backtrace: {e}")
     
     def _print_frame(self, cfp, depth):
@@ -163,7 +163,7 @@ class RubyStackPrinter:
                         env_me_cref = ep[-2]
                         
                         try:
-                            me_type = gdb.lookup_type('rb_callable_method_entry_t').pointer()
+                            me_type = debugger.lookup_type('rb_callable_method_entry_t').pointer()
                             me = env_me_cref.cast(me_type)
                             
                             # Get the C function pointer
@@ -176,7 +176,7 @@ class RubyStackPrinter:
                             func_addr = int(cfunc)
                             func_name = ""
                             try:
-                                symbol_info = gdb.execute(f"info symbol 0x{func_addr:x}", to_string=True)
+                                symbol_info = debugger.execute(f"info symbol 0x{func_addr:x}", to_string=True)
                                 func_name = f" ({symbol_info.split()[0]})"
                             except:
                                 func_name = f" (0x{func_addr:x})"
@@ -263,7 +263,7 @@ class RubyStackPrinter:
             if self.show_values:
                 self._print_stack_values(cfp, iseq)
             
-        except (gdb.error, RuntimeError) as e:
+        except (debugger.Error, RuntimeError) as e:
             print(self.terminal.print(
                 format.metadata, f"  #{depth}: ",
                 format.error, f"[error reading frame info: {e}]",
@@ -352,13 +352,13 @@ class RubyStackPrinter:
                     
                     values_printed += 1
                     value_ptr -= 1
-                except (gdb.error, gdb.MemoryError):
+                except (debugger.Error, debugger.MemoryError):
                     break
             
             if values_printed == 0:
                 print(self.terminal.print(format.dim, "      (empty stack)", format.reset))
                 
-        except (gdb.error, RuntimeError) as e:
+        except (debugger.Error, RuntimeError) as e:
             # Silently skip if we can't read stack values
             pass
     
@@ -528,7 +528,7 @@ class RubyStackPrinter:
             return f"<error:{e}>"
 
 
-class RubyStackTraceCommand(gdb.Command):
+class RubyStackTraceCommand(debugger.Command):
     """Print combined C and Ruby backtrace for current fiber or thread.
     
     Usage: rb-stack-trace [--values]
@@ -545,7 +545,7 @@ class RubyStackTraceCommand(gdb.Command):
     """
     
     def __init__(self):
-        super(RubyStackTraceCommand, self).__init__("rb-stack-trace", gdb.COMMAND_USER)
+        super(RubyStackTraceCommand, self).__init__("rb-stack-trace", debugger.COMMAND_USER)
         self.printer = RubyStackPrinter()
     
     def usage(self):
@@ -587,14 +587,14 @@ class RubyStackTraceCommand(gdb.Command):
                 
                 try:
                     # Get current execution context from the running thread
-                    ec = gdb.parse_and_eval('ruby_current_ec')
+                    ec = debugger.parse_and_eval('ruby_current_ec')
                     if int(ec) == 0:
                         print("Error: No execution context available")
                         print("Either select a fiber with 'rb-fiber-switch' or ensure Ruby is running")
                         return
                     
                     self.printer.print_backtrace(ec, from_tty)
-                except gdb.error as e:
+                except debugger.Error as e:
                     print(f"Error getting execution context: {e}")
                     print("Try selecting a fiber first with 'rb-fiber-switch'")
                     return

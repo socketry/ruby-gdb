@@ -37,42 +37,22 @@ class RStringBase:
 		pointer = self.data_ptr()
 		length = self.length()
 		
-		# Memory reading is debugger-specific for now
-		# TODO: Add memory reading to debugger abstraction
-		if debugger.DEBUGGER_NAME == 'gdb':
-			import gdb as _gdb
-			inferior = _gdb.selected_inferior()
-		else:  # lldb
-			import lldb as _lldb
-			# LLDB memory reading is different, using process.ReadMemory()
-			process = _lldb.debugger.GetSelectedTarget().GetProcess()
-			error = _lldb.SBError()
-			# Convert pointer to integer address for LLDB
-			pointer_addr = int(pointer)
-			if length and length > 0:
-				data = process.ReadMemory(pointer_addr, length, error)
-				if not error.Success():
-					return (b"", 0)
-				return (bytes(data), length)
-			# Fallback for LLDB
-			data = process.ReadMemory(pointer_addr, max_fallback_scan, error)
-			if not error.Success():
-				return (b"", 0)
-			buffer = bytes(data)
-			n = buffer.find(b'\x00')
-			if n == -1:
-				n = max_fallback_scan
-			return (buffer[:n], n)
+		# Convert pointer to integer address
+		pointer_addr = int(pointer)
 		
 		if length and length > 0:
-			return (inferior.read_memory(pointer, length).tobytes(), length)
-		
-		# Fallback: scan for NUL terminator when length is unavailable (e.g., symbol table strings)
-		buffer = inferior.read_memory(pointer, max_fallback_scan).tobytes()
-		n = buffer.find(b'\x00')
-		if n == -1:
-			n = max_fallback_scan
-		return (buffer[:n], n)
+			# Known length - read exact amount
+			try:
+				data = debugger.read_memory(pointer_addr, length)
+				return (data, length)
+			except debugger.MemoryError:
+				return (b"", 0)
+		else:
+			# Unknown length - scan for NUL terminator
+			try:
+				return debugger.read_cstring(pointer_addr, max_fallback_scan)
+			except debugger.MemoryError:
+				return (b"", 0)
 	
 	def to_str(self, encoding='utf-8'):
 		"""Convert to Python string."""

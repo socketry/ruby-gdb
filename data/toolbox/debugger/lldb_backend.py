@@ -335,12 +335,16 @@ def set_convenience_variable(name, value):
 	# Full implementation would require more complex value handling
 
 
-def execute(command, from_tty=False):
+def execute(command, from_tty=False, to_string=False):
 	"""Execute a debugger command.
 	
 	Args:
 		command: Command string to execute
 		from_tty: Whether command is from terminal (unused in LLDB)
+		to_string: If True, return command output as string
+	
+	Returns:
+		String output if to_string=True, None otherwise
 	"""
 	debugger = lldb.debugger
 	interpreter = debugger.GetCommandInterpreter()
@@ -350,6 +354,10 @@ def execute(command, from_tty=False):
 	
 	if not result.Succeeded():
 		raise Error(f"Command failed: {result.GetError()}")
+	
+	if to_string:
+		return result.GetOutput()
+	return None
 
 
 def invalidate_cached_frames():
@@ -381,4 +389,105 @@ def get_enum_value(enum_name, member_name):
 	"""
 	enum_expr = f"(int){enum_name}::{member_name}"
 	return int(parse_and_eval(enum_expr))
+
+
+def read_memory(address, size):
+	"""Read memory from the debugged process.
+	
+	Args:
+		address: Memory address (as integer or pointer value)
+		size: Number of bytes to read
+	
+	Returns:
+		bytes object containing the memory contents
+	
+	Raises:
+		MemoryError: If memory cannot be read
+	"""
+	# Convert to integer address if needed
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	process = lldb.debugger.GetSelectedTarget().GetProcess()
+	error = lldb.SBError()
+	data = process.ReadMemory(address, size, error)
+	
+	if not error.Success():
+		raise MemoryError(f"Cannot read {size} bytes at 0x{address:x}: {error}")
+	
+	return bytes(data)
+
+
+def read_cstring(address, max_length=256):
+	"""Read a NUL-terminated C string from memory.
+	
+	Args:
+		address: Memory address (as integer or pointer value)
+		max_length: Maximum bytes to read before giving up
+	
+	Returns:
+		Tuple of (bytes, actual_length) where actual_length is the string
+		length not including the NUL terminator
+	
+	Raises:
+		MemoryError: If memory cannot be read
+	"""
+	# Convert to integer address if needed
+	if hasattr(address, '__int__'):
+		address = int(address)
+	
+	process = lldb.debugger.GetSelectedTarget().GetProcess()
+	error = lldb.SBError()
+	data = process.ReadMemory(address, max_length, error)
+	
+	if not error.Success():
+		raise MemoryError(f"Cannot read memory at 0x{address:x}: {error}")
+	
+	buffer = bytes(data)
+	n = buffer.find(b'\x00')
+	if n == -1:
+		n = max_length
+	return (buffer[:n], n)
+
+
+def create_value(address, value_type):
+	"""Create a typed Value from a memory address.
+	
+	Args:
+		address: Memory address (as integer, pointer value, or lldb.SBValue)
+		value_type: Type object (or native lldb.SBType) to cast to
+	
+	Returns:
+		Value object representing the typed value at that address
+	
+	Examples:
+		>>> rbasic_type = debugger.lookup_type('struct RBasic').pointer()
+		>>> obj = debugger.create_value(0x7fff12345678, rbasic_type)
+	"""
+	# Unwrap Type if needed
+	if isinstance(value_type, Type):
+		value_type = value_type._type
+	
+	# Handle different address types
+	if isinstance(address, Value):
+		# It's already a wrapped Value, just cast it
+		return Value(address._value.Cast(value_type))
+	elif isinstance(address, lldb.SBValue):
+		# It's a native lldb.SBValue, cast it directly
+		return Value(address.Cast(value_type))
+	else:
+		# Convert to integer address if needed
+		if hasattr(address, '__int__'):
+			address = int(address)
+		
+		# In LLDB, create a value from an address with a type
+		target = lldb.debugger.GetSelectedTarget()
+		addr_value = target.CreateValueFromAddress(
+			f"addr_0x{address:x}",
+			lldb.SBAddress(address, target),
+			value_type
+		)
+		
+		return Value(addr_value)
+
 

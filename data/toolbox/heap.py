@@ -1,4 +1,4 @@
-import gdb
+import debugger
 import sys
 
 # Constants
@@ -28,7 +28,7 @@ class RubyHeap:
 			True if initialization successful, False otherwise
 		"""
 		try:
-			self.vm_ptr = gdb.parse_and_eval('ruby_current_vm_ptr')
+			self.vm_ptr = debugger.parse_and_eval('ruby_current_vm_ptr')
 			if int(self.vm_ptr) == 0:
 				print("Error: ruby_current_vm_ptr is NULL")
 				print("Make sure Ruby is fully initialized and the process is running.")
@@ -37,7 +37,7 @@ class RubyHeap:
 			# Ruby 3.3+ moved objspace into a gc struct
 			try:
 				self.objspace = self.vm_ptr['gc']['objspace']
-			except (gdb.error, KeyError):
+			except (debugger.Error, KeyError):
 				# Ruby 3.2 and earlier have objspace directly in VM
 				self.objspace = self.vm_ptr['objspace']
 			
@@ -47,16 +47,16 @@ class RubyHeap:
 				return False
 
 			# Cache commonly used type lookups
-			self._rbasic_type = gdb.lookup_type('struct RBasic').pointer()
-			self._value_type = gdb.lookup_type('VALUE')
-			self._char_ptr_type = gdb.lookup_type('char').pointer()
+			self._rbasic_type = debugger.lookup_type('struct RBasic').pointer()
+			self._value_type = debugger.lookup_type('VALUE')
+			self._char_ptr_type = debugger.lookup_type('char').pointer()
 
 			return True
-		except gdb.error as e:
+		except debugger.Error as e:
 			print(f"Error initializing: {e}")
 			print("Make sure you're debugging a Ruby process with debug symbols.")
 			return False
-		except gdb.MemoryError as e:
+		except debugger.MemoryError as e:
 			print(f"Memory error during initialization: {e}")
 			print("The Ruby VM may not be fully initialized yet.")
 			print("Try breaking at a point where Ruby is running (e.g., after rb_vm_exec).")
@@ -75,10 +75,10 @@ class RubyHeap:
 			# Ruby 3.3+ uses rb_darray with 'data' field, Ruby 3.2- uses direct pointer
 			try:
 				return self.objspace['heap_pages']['sorted']['data'][page_index]
-			except (gdb.error, KeyError):
+			except (debugger.Error, KeyError):
 				# Ruby 3.2 and earlier: sorted is a direct pointer array
 				return self.objspace['heap_pages']['sorted'][page_index]
-		except (gdb.MemoryError, gdb.error):
+		except (debugger.MemoryError, debugger.Error):
 			return None
 	
 	def iterate_heap(self):
@@ -137,7 +137,7 @@ class RubyHeap:
 		
 		try:
 			allocated_pages = int(self.objspace['heap_pages']['allocated_pages'])
-		except (gdb.MemoryError, gdb.error):
+		except (debugger.MemoryError, debugger.Error):
 			return None
 		
 		# Linear search through pages
@@ -156,7 +156,7 @@ class RubyHeap:
 				page_end = start + (total_slots * slot_size)
 				if start <= address < page_end:
 					return i
-			except (gdb.MemoryError, gdb.error):
+			except (debugger.MemoryError, debugger.Error):
 				continue
 		
 		return None
@@ -204,7 +204,7 @@ class RubyHeap:
 
 		try:
 			allocated_pages = int(self.objspace['heap_pages']['allocated_pages'])
-		except gdb.MemoryError as e:
+		except debugger.MemoryError as e:
 			print(f"Error reading heap_pages: {e}")
 			print("The heap may not be initialized yet.")
 			return
@@ -218,14 +218,14 @@ class RubyHeap:
 				start = int(page['start'])
 				total_slots = int(page['total_slots'])
 				slot_size = int(page['slot_size'])
-			except (gdb.MemoryError, gdb.error) as e:
+			except (debugger.MemoryError, debugger.Error) as e:
 				print(f"Error reading page {i}: {e}", file=sys.stderr)
 				continue
 
 			# OPTIMIZATION: Create base pointer once per page
 			try:
-				base_ptr = gdb.Value(start).cast(self._rbasic_type)
-			except (gdb.error, RuntimeError):
+				base_ptr = debugger.create_value(start, self._rbasic_type)
+			except (debugger.Error, RuntimeError):
 				continue
 
 			# For the first page, calculate which slot to start from
@@ -261,7 +261,7 @@ class RubyHeap:
 					# Yield the VALUE, flags, and address
 					obj = obj_ptr.cast(self._value_type)
 					yield obj, flags, obj_address
-				except (gdb.error, RuntimeError):
+				except (debugger.Error, RuntimeError):
 					continue
 	
 	def find_typed_data(self, data_type, limit=None, progress=False):
@@ -281,13 +281,13 @@ class RubyHeap:
 		T_DATA = 0x0c
 		
 		# Get RTypedData type for casting
-		rtypeddata_type = gdb.lookup_type('struct RTypedData').pointer()
+		rtypeddata_type = debugger.lookup_type('struct RTypedData').pointer()
 		
 		try:
 			if progress:
 				allocated_pages = int(self.objspace['heap_pages']['allocated_pages'])
 				print(f"Scanning {allocated_pages} heap pages...", file=sys.stderr)
-		except (gdb.MemoryError, gdb.error):
+		except (debugger.MemoryError, debugger.Error):
 			pass
 		
 		objects_checked = 0
@@ -313,12 +313,13 @@ class RubyHeap:
 			try:
 				typed_data = obj.cast(rtypeddata_type)
 				
-				if typed_data['type'] == data_type:
+				# Compare addresses instead of values to avoid GDB conversion issues
+				if int(typed_data['type']) == int(data_type):
 					# Return the VALUE, not the extracted data pointer
 					objects.append(obj)
 					if progress:
 						print(f"  Found object #{len(objects)} at VALUE 0x{int(obj):x}", file=sys.stderr)
-			except (gdb.error, RuntimeError):
+			except (debugger.Error, RuntimeError):
 				continue
 		
 		if progress:
@@ -330,7 +331,7 @@ class RubyHeap:
 		return objects
 
 
-class RubyHeapScanCommand(gdb.Command):
+class RubyHeapScanCommand(debugger.Command):
 	"""Scan the Ruby heap for objects, optionally filtered by type.
 	
 	Usage: rb-heap-scan [--type TYPE] [--limit N] [--from $heap]
@@ -361,7 +362,7 @@ class RubyHeapScanCommand(gdb.Command):
 	"""
 	
 	def __init__(self):
-		super(RubyHeapScanCommand, self).__init__("rb-heap-scan", gdb.COMMAND_USER)
+		super(RubyHeapScanCommand, self).__init__("rb-heap-scan", debugger.COMMAND_USER)
 	
 	def usage(self):
 		"""Print usage information."""
@@ -422,8 +423,8 @@ class RubyHeapScanCommand(gdb.Command):
 			if from_option is not None:
 				try:
 					# $heap should be an address (pointer value)
-					from_address = int(gdb.parse_and_eval(from_option))
-				except (gdb.error, ValueError, TypeError) as e:
+					from_address = int(debugger.parse_and_eval(from_option))
+				except (debugger.Error, ValueError, TypeError) as e:
 					# If $heap doesn't exist or is void/invalid, start from the beginning
 					print(f"Note: {from_option} is not set or invalid, wrapping around to start of heap", file=sys.stderr)
 					from_address = None
@@ -490,7 +491,7 @@ class RubyHeapScanCommand(gdb.Command):
 				
 				# Set as convenience variable
 				var_name = f"heap{i}"
-				gdb.set_convenience_variable(var_name, obj)
+				debugger.set_convenience_variable(var_name, obj)
 				
 				# Try to interpret and display the object
 				try:
@@ -518,7 +519,8 @@ class RubyHeapScanCommand(gdb.Command):
 			# Save next address to $heap for pagination
 			if next_address is not None:
 				# Save the next address to continue from
-				gdb.set_convenience_variable('heap', gdb.Value(next_address).cast(gdb.lookup_type('void').pointer()))
+				void_ptr_type = debugger.lookup_type('void').pointer()
+				debugger.set_convenience_variable('heap', debugger.create_value(next_address, void_ptr_type))
 				print(terminal.print(
 					format.dim,
 					f"Next scan address saved to $heap: 0x{next_address:016x}",
@@ -531,7 +533,7 @@ class RubyHeapScanCommand(gdb.Command):
 				))
 			else:
 				# Reached the end of the heap - unset $heap so next scan starts fresh
-				gdb.set_convenience_variable('heap', None)
+				debugger.set_convenience_variable('heap', None)
 				print(terminal.print(
 					format.dim,
 					f"Reached end of heap (no more objects to scan)",

@@ -64,6 +64,9 @@ set_convenience_variable = _backend.set_convenience_variable
 execute = _backend.execute
 invalidate_cached_frames = _backend.invalidate_cached_frames
 get_enum_value = _backend.get_enum_value
+read_memory = _backend.read_memory
+read_cstring = _backend.read_cstring
+create_value = _backend.create_value
 
 # Constants
 COMMAND_DATA = _backend.COMMAND_DATA
@@ -82,6 +85,9 @@ __all__ = [
 	'execute',
 	'invalidate_cached_frames',
 	'get_enum_value',
+	'read_memory',
+	'read_cstring',
+	'create_value',
 	'COMMAND_DATA',
 	'COMMAND_USER',
 ]
