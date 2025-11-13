@@ -13,3 +13,4 @@ Fiber #1: <T_DATA@...> → <struct rb_fiber_struct@...>
   CFP: <rb_control_frame_t@...>
 
 Fibers cached. Use "..." to switch to a fiber.
+

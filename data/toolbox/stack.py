@@ -587,10 +587,38 @@ class RubyStackTraceCommand(debugger.Command):
                 
                 try:
                     # Get current execution context from the running thread
-                    ec = debugger.parse_and_eval('ruby_current_ec')
-                    if int(ec) == 0:
+                    # The approach depends on the debugger:
+                    # - GDB can access thread-local variable ruby_current_ec directly
+                    # - LLDB cannot access TLS variables, must use rb_current_ec_noinline()
+                    ec = None
+                    
+                    if debugger.DEBUGGER_NAME == 'gdb':
+                        # GDB: Try direct TLS variable access first (faster)
+                        try:
+                            ec = debugger.parse_and_eval('ruby_current_ec')
+                        except debugger.Error:
+                            # Fallback to function call
+                            try:
+                                ec = debugger.parse_and_eval('rb_current_ec_noinline()')
+                            except debugger.Error:
+                                pass
+                    else:
+                        # LLDB: Must use function call (cannot access TLS variables)
+                        try:
+                            ec = debugger.parse_and_eval('rb_current_ec_noinline()')
+                        except debugger.Error:
+                            # Fallback attempts for macOS or other platforms
+                            try:
+                                ec = debugger.parse_and_eval('rb_current_ec()')
+                            except debugger.Error:
+                                pass
+                    
+                    if ec is None or int(ec) == 0:
                         print("Error: No execution context available")
                         print("Either select a fiber with 'rb-fiber-switch' or ensure Ruby is running")
+                        print("\nTroubleshooting:")
+                        print("  - Check if Ruby symbols are loaded: image lookup -n rb_current_ec_noinline")
+                        print("  - Ensure the process is stopped at a Ruby frame")
                         return
                     
                     self.printer.print_backtrace(ec, from_tty)

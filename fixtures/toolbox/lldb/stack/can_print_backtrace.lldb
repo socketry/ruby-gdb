@@ -1,5 +1,3 @@
-# Test rb-stack-trace command
-
 command script import data/toolbox/init.py
 
 # Break at rb_f_puts in inner_method
