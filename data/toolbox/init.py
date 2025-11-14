@@ -24,7 +24,7 @@ failed_extensions = []
 
 # Try to load each extension individually
 extensions_to_load = [
-	('inspect', 'rb-inspect'),
+	('print', 'rb-inspect'),
 	('context', 'rb-context, rb-context-storage'),
 	('fiber', 'rb-fiber-scan-heap, rb-fiber-switch'),
 	('stack', 'rb-stack-trace'),
@@ -34,9 +34,9 @@ extensions_to_load = [
 for module_name, commands in extensions_to_load:
 	try:
 		print(f"DEBUG: Loading module {module_name}", file=sys.stderr)
-		if module_name == 'inspect':
-			import inspect
-			print(f"DEBUG: inspect module loaded successfully", file=sys.stderr)
+		if module_name == 'print':
+			import print as print_module
+			print(f"DEBUG: print module loaded successfully", file=sys.stderr)
 		elif module_name == 'context':
 			import context
 		elif module_name == 'fiber':

@@ -377,9 +377,9 @@ class RubyContextStorageCommand(debugger.Command):
             # Get debug flag
             debug = arguments.has_flag('debug')
             
-            # Use inspect module to print the storage
-            import inspect as inspect_module
-            printer = inspect_module.RubyObjectPrinter()
+            # Use print module to print the storage
+            import print as print_module
+            printer = print_module.RubyObjectPrinter()
             
             # Build arguments for the printer
             flags_set = {'debug'} if debug else set()

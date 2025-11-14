@@ -192,7 +192,7 @@ if toolbox_dir not in sys.path:
 This allows:
 ```python
 import debugger      # data/toolbox/debugger.py
-import inspect       # data/toolbox/inspect.py
+import print         # data/toolbox/print.py
 import fiber         # data/toolbox/fiber.py
 from debugger import gdb   # data/toolbox/debugger/gdb.py
 ```

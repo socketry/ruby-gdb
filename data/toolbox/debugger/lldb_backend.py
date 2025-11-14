@@ -465,6 +465,7 @@ class Command:
 
 
 def register(command_name, command_class, usage=None, category=COMMAND_USER):
+	print(f"DEBUG: Registering command: {command_name} category: {category}")
 	"""Register a command with LLDB using declarative interface.
 	
 	Creates a wrapper that handles argument parsing, validation, and delegation.
@@ -527,6 +528,7 @@ def register(command_name, command_class, usage=None, category=COMMAND_USER):
 				import traceback
 				traceback.print_exc()
 	
+	print(f"DEBUG: Returning RegisteredCommand for: {command_name}")
 	return RegisteredCommand()
 
 
