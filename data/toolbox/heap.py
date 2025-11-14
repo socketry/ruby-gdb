@@ -1,5 +1,6 @@
 import debugger
 import sys
+import constants
 
 # Constants
 RBASIC_FLAGS_TYPE_MASK = 0x1f
@@ -66,15 +67,15 @@ class RubyHeap:
 				return False
 
 			# Cache commonly used type lookups
-			self._rbasic_type = debugger.lookup_type('struct RBasic').pointer()
-			self._value_type = debugger.lookup_type('VALUE')
-			self._char_ptr_type = debugger.lookup_type('char').pointer()
+			self._rbasic_type = constants.type_struct('struct RBasic').pointer()
+			self._value_type = constants.type_struct('VALUE')
+			self._char_ptr_type = constants.type_struct('char').pointer()
 			
 			# Cache flags field offset for fast memory access
 			# This is critical for LLDB performance where field lookup is expensive
 			try:
 				# Get a dummy RBasic to find the flags offset
-				rbasic_struct = debugger.lookup_type('struct RBasic')
+				rbasic_struct = constants.type_struct('struct RBasic')
 				# In RBasic, 'flags' is the first field (offset 0)
 				# We need to find its offset programmatically for portability
 				fields = rbasic_struct.fields()
@@ -277,9 +278,9 @@ class RubyHeap:
 			return
 
 		# Cache types for pointer arithmetic and casting
-		rbasic_type = debugger.lookup_type('struct RBasic')
+		rbasic_type = constants.type_struct('struct RBasic')
 		rbasic_ptr_type = rbasic_type.pointer()
-		char_ptr_type = debugger.lookup_type('char').pointer()
+		char_ptr_type = constants.type_struct('char').pointer()
 
 		for i in range(start_page, allocated_pages):
 			page = self._get_page(i)
@@ -400,7 +401,7 @@ class RubyHeap:
 		T_DATA = 0x0c
 		
 		# Get RTypedData type for casting
-		rtypeddata_type = debugger.lookup_type('struct RTypedData').pointer()
+		rtypeddata_type = constants.type_struct('struct RTypedData').pointer()
 		
 		try:
 			if progress:
@@ -431,9 +432,29 @@ class RubyHeap:
 			# Cast to RTypedData and check type
 			try:
 				typed_data = obj.cast(rtypeddata_type)
+				type_field = typed_data['type']
 				
-				# Compare values directly using __eq__
-				if typed_data['type'] == data_type:
+				# Check if field access failed (returns None when type is incomplete)
+				if type_field is None:
+					# On first failure, print a helpful error message once
+					if not hasattr(self, '_incomplete_type_warning_shown'):
+						self._incomplete_type_warning_shown = True
+						print("\nError: struct RTypedData debug symbols are incomplete", file=sys.stderr)
+						print("Cannot access RTypedData fields with this Ruby version.", file=sys.stderr)
+						print("\nThis is a known issue with Ruby 3.4.x on macOS:", file=sys.stderr)
+						print("  • A dsymutil bug drops RTypedData from debug symbols", file=sys.stderr)
+						print("  • Caused by complex 'const T *const' type in the struct", file=sys.stderr)
+						print("  • Fixed in Ruby head (commit ce51ef30df)", file=sys.stderr)
+						print("\nWorkarounds:", file=sys.stderr)
+						print("  • Use Ruby head: ruby-install ruby-head -- CFLAGS=\"-g -O0\"", file=sys.stderr)
+						print("  • Or use GDB on Linux (works with Ruby 3.4.x)", file=sys.stderr)
+						print("\nSee: https://socketry.github.io/toolbox/guides/getting-started/", file=sys.stderr)
+						print(file=sys.stderr)
+					# Can't scan without complete type info
+					break
+				
+				# Compare type pointers
+				if type_field == data_type:
 					# Return the VALUE, not the extracted data pointer
 					objects.append(obj)
 					if progress:
@@ -638,7 +659,7 @@ class RubyHeapScanCommand(debugger.Command):
 			# Save next address to $heap for pagination
 			if next_address is not None:
 				# Save the next address to continue from
-				void_ptr_type = debugger.lookup_type('void').pointer()
+				void_ptr_type = constants.type_struct('void').pointer()
 				debugger.set_convenience_variable('heap', debugger.create_value(next_address, void_ptr_type))
 				print(terminal.print(
 					format.dim,

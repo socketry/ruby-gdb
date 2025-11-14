@@ -11,6 +11,7 @@ if debugger.DEBUGGER_NAME == 'gdb':
 
 # Import command parser
 import command
+import constants
 import value
 import format
 import heap
@@ -93,10 +94,10 @@ class RubyFiber:
         """Extract struct rb_fiber_struct* from the Fiber VALUE."""
         if self._pointer is None:
             # Cast to RTypedData and extract the data pointer
-            rtypeddata_type = debugger.lookup_type('struct RTypedData').pointer()
+            rtypeddata_type = constants.type_struct('struct RTypedData').pointer()
             typed_data = self.value.cast(rtypeddata_type)
             
-            rb_fiber_struct_type = debugger.lookup_type('struct rb_fiber_struct').pointer()
+            rb_fiber_struct_type = constants.type_struct('struct rb_fiber_struct').pointer()
             self._pointer = typed_data['data'].cast(rb_fiber_struct_type)
         
         return self._pointer
@@ -282,7 +283,7 @@ class RubyFiberScanHeapCommand(debugger.Command):
                 return None
 
             # Reconstruct VALUEs from addresses
-            value_type = debugger.lookup_type('VALUE')
+            value_type = constants.type_struct('VALUE')
             fibers = []
             for addr in fiber_addrs:
                 try:
@@ -373,7 +374,22 @@ class RubyFiberScanHeapCommand(debugger.Command):
             return
 
         # Get fiber_data_type for matching
-        fiber_data_type = debugger.parse_and_eval('&fiber_data_type')
+        try:
+            fiber_data_type = debugger.parse_and_eval('&fiber_data_type')
+            if fiber_data_type is None or int(fiber_data_type) == 0:
+                print("Error: Could not find 'fiber_data_type' symbol")
+                print("\nThis usually means:")
+                print("  • Ruby debug symbols are not available")
+                print("  • Ruby version doesn't export this symbol")
+                print("\nTo fix:")
+                print("  • Install Ruby with debug symbols")
+                print("  • On macOS: brew install ruby (includes debug info)")
+                print("  • Or compile Ruby with --enable-debug-symbols")
+                return
+        except debugger.Error as e:
+            print(f"Error: Could not evaluate '&fiber_data_type': {e}")
+            print("\nRuby debug symbols may not be available.")
+            return
 
         if limit:
             print(f"Scanning heap for first {limit} Fiber object(s)...", file=sys.stderr)
@@ -700,7 +716,7 @@ class RubyFiberSwitchCommand(debugger.Command):
             
             # Ensure it's cast to VALUE type
             try:
-                value_type = debugger.lookup_type('VALUE')
+                value_type = constants.type_struct('VALUE')
             except debugger.Error as lookup_err:
                 print(f"Error: Could not lookup type 'VALUE': {lookup_err}")
                 print("This usually means Ruby symbols aren't fully loaded yet.")

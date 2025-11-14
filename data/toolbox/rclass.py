@@ -86,13 +86,13 @@ class RClass:
 			
 			# Strategy 2: Try modern rb_classext_struct.classpath (Ruby 3.4+)
 			try:
-				rclass = self.klass.cast(debugger.lookup_type('struct RClass').pointer())
+				rclass = self.klass.cast(constants.type_struct('struct RClass').pointer())
 				# Try to access classext.classpath
 				try:
 					# Try embedded classext (RCLASS_EXT_EMBEDDED)
 					rclass_size = debugger.parse_and_eval("sizeof(struct RClass)")
 					classext_addr = int(self.klass) + int(rclass_size)
-					classext_type = debugger.lookup_type('rb_classext_t')
+					classext_type = constants.type_struct('rb_classext_t')
 					classext_ptr = debugger.create_value_from_address(classext_addr, classext_type).address
 					classpath_val = classext_ptr['classpath']
 				except:

@@ -515,10 +515,13 @@ def lookup_type(type_name):
 	
 	Returns:
 		Type object
+	
+	Raises:
+		Error: If type cannot be found in debug symbols
 	"""
 	target = lldb.debugger.GetSelectedTarget()
 	
-	# LLDB's FindFirstType searches the type system
+	# LLDB's FindFirstType searches loaded debug symbols
 	lldb_type = target.FindFirstType(type_name)
 	
 	if not lldb_type.IsValid():

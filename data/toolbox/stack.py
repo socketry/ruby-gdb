@@ -4,6 +4,7 @@ import debugger
 import sys
 
 # Import Ruby GDB modules
+import constants
 import context
 import format
 import value
@@ -53,13 +54,13 @@ class RubyStackPrinter:
     def _initialize_types(self):
         """Initialize cached type lookups."""
         if self._rbasic_type is None:
-            self._rbasic_type = debugger.lookup_type('struct RBasic').pointer()
+            self._rbasic_type = constants.type_struct('struct RBasic').pointer()
         if self._value_type is None:
-            self._value_type = debugger.lookup_type('VALUE')
+            self._value_type = constants.type_struct('VALUE')
         if self._cfp_type is None:
-            self._cfp_type = debugger.lookup_type('rb_control_frame_t').pointer()
+            self._cfp_type = constants.type_struct('rb_control_frame_t').pointer()
         if self._rstring_type is None:
-            self._rstring_type = debugger.lookup_type('struct RString').pointer()
+            self._rstring_type = constants.type_struct('struct RString').pointer()
     
     def print_fiber_backtrace(self, fiber_ptr, from_tty=True):
         """Print backtrace for a Ruby fiber.
@@ -164,7 +165,7 @@ class RubyStackPrinter:
                         env_me_cref = ep[-2]
                         
                         try:
-                            me_type = debugger.lookup_type('rb_callable_method_entry_t').pointer()
+                            me_type = constants.type_struct('rb_callable_method_entry_t').pointer()
                             me = env_me_cref.cast(me_type)
                             
                             # Get the C function pointer

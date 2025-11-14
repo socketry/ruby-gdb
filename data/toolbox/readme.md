@@ -89,7 +89,7 @@ value_cast = value.cast(type.pointer())
 ### GDB
 ```bash
 gem install toolbox
-bake toolbox:gdb:install
+bake -g toolbox toolbox:gdb:install
 ```
 
 This adds to `~/.gdbinit`:
@@ -101,7 +101,7 @@ source /path/to/gem/data/toolbox/init.py
 ### LLDB
 ```bash
 gem install toolbox
-bake toolbox:lldb:install
+bake -g toolbox toolbox:lldb:install
 ```
 
 This adds to `~/.lldbinit`:
