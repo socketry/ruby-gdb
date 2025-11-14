@@ -176,27 +176,3 @@ Ruby hashes and arrays can contain nested structures:
 ~~~
 
 The `--depth` flag controls how deep to recurse into nested objects.
-
-## Next Steps
-
-- Learn about {ruby Ruby::GDB::object-inspection inspecting Ruby objects} in detail
-- Explore {ruby Ruby::GDB::fiber-debugging fiber debugging} capabilities
-- Understand {ruby Ruby::GDB::stack-inspection stack analysis} techniques
-- Master {ruby Ruby::GDB::heap-debugging heap navigation} for memory issues
-
-## Requirements
-
-- GDB with Python support (GDB 7.0+)
-- Ruby 3.0+ recommended (works with 2.x with limitations)
-- For best results: Ruby built with debug symbols (`--with-debug-symbols` or install `ruby-debug` package)
-
-## Platform Support
-
-These extensions work on:
-
-- **Linux**: Full support with all features
-- **macOS**: Viewing core dumps works; running processes may require code signing or disabling SIP
-- **BSD**: Should work similar to Linux (untested)
-
-For production debugging, Linux with Ruby debug symbols provides the best experience.
-
