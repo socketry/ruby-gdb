@@ -140,9 +140,9 @@ See what values are on the current frame's stack:
 (gdb) set $sp = $ec->cfp->sp
 
 # Print values on stack
-(gdb) rb-inspect *(VALUE*)($sp - 1)  # Top of stack
-(gdb) rb-inspect *(VALUE*)($sp - 2)  # Second value
-(gdb) rb-inspect *(VALUE*)($sp - 3)  # Third value
+(gdb) rb-print *(VALUE*)($sp - 1)  # Top of stack
+(gdb) rb-print *(VALUE*)($sp - 2)  # Second value
+(gdb) rb-print *(VALUE*)($sp - 3)  # Third value
 ~~~
 
 ### Tracking Fiber Switches

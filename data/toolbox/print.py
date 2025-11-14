@@ -1,9 +1,7 @@
-"""Object inspection command for Ruby values."""
+"""Print command for Ruby values."""
 
 import debugger
 import sys
-
-print("DEBUG: inspect.py is being loaded", file=sys.stderr)
 
 # Import utilities
 import command
@@ -18,8 +16,6 @@ import rfloat
 import rbignum
 import rbasic
 import format
-
-print("DEBUG: All imports done in inspect.py", file=sys.stderr)
 
 
 class RubyObjectPrinter:
@@ -79,16 +75,6 @@ class RubyObjectPrinter:
 					traceback.print_exc(file=sys.stderr)
 
 
-print("DEBUG: RubyObjectPrinter class defined", file=sys.stderr)
-
 # Register command using new interface
-print("DEBUG: About to register rb-inspect", file=sys.stderr)
-try:
-	print(f"DEBUG: Registering rb-inspect, debugger.register = {debugger.register}", file=sys.stderr)
-	result = debugger.register("rb-inspect", RubyObjectPrinter, usage=RubyObjectPrinter.USAGE)
-	print(f"DEBUG: Registration result = {result}", file=sys.stderr)
-except Exception as e:
-	print(f"ERROR: Failed to register rb-inspect: {e}", file=sys.stderr)
-	import traceback
-	traceback.print_exc(file=sys.stderr)
+debugger.register("rb-print", RubyObjectPrinter, usage=RubyObjectPrinter.USAGE)
 
