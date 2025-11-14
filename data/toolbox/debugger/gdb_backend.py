@@ -648,7 +648,7 @@ def register(name, handler_class, usage=None, category=COMMAND_USER):
 				print(f"Error: {e}")
 				if self.usage_spec:
 					print()
-					print(self.usage_spec.help_text(name, terminal))
+					self.usage_spec.print_to(terminal, name)
 			except Exception as e:
 				print(f"Error: {e}")
 				import traceback

@@ -138,25 +138,12 @@ class RSymbolImmediate:
 	
 	def print_to(self, terminal):
 		"""Return formatted symbol representation."""
+		terminal.print_type_tag('T_SYMBOL')
 		name = self.to_str()
 		if name:
-			tag = terminal.print(
-				format.metadata, '<',
-				format.type, 'T_SYMBOL',
-				format.metadata, '>',
-				format.reset
-			)
-			symbol_val = terminal.print(format.symbol, f':{name}', format.reset)
-			return f"{tag} {symbol_val}"
+			terminal.print(format.symbol, f':{name}', format.reset)
 		else:
-			tag = terminal.print(
-				format.metadata, '<',
-				format.type, 'T_SYMBOL',
-				format.metadata, '>',
-				format.reset
-			)
-			symbol_val = terminal.print(format.symbol, f':id_0x{self.id():x}', format.reset)
-			return f"{tag} {symbol_val}"
+			terminal.print(format.symbol, f':id_0x{self.id():x}', format.reset)
 	
 	def print_recursive(self, printer, depth):
 		"""Print this symbol (no recursion needed)."""

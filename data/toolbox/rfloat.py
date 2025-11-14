@@ -32,15 +32,10 @@ class RFloatImmediate:
 		return f"<T_FLOAT> {self.float_value()}"
 	
 	def print_to(self, terminal):
-		"""Return formatted float representation."""
-		tag = terminal.print(
-			format.metadata, '<',
-			format.type, 'T_FLOAT',
-			format.metadata, '>',
-			format.reset
-		)
-		num_val = terminal.print(format.number, str(self.float_value()), format.reset)
-		return f"{tag} {num_val}"
+		"""Print formatted float representation."""
+		terminal.print_type_tag('T_FLOAT')
+		terminal.print(' ', end='')
+		terminal.print(format.number, str(self.float_value()), format.reset, end='')
 	
 	def print_recursive(self, printer, depth):
 		"""Print this float (no recursion needed)."""

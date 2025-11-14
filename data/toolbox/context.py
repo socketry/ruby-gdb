@@ -172,56 +172,58 @@ class RubyContext:
         errinfo = self.errinfo
         has_exception = self.has_exception
         
-        print("Execution Context:")
-        print(f"  $ec = ", end='')
-        print(terminal.print_type_tag('rb_execution_context_t', int(self.ec), None))
+        terminal.print("Execution Context:")
+        terminal.print(f"  $ec = ", end='')
+        terminal.print_type_tag('rb_execution_context_t', int(self.ec), None)
         
         # VM Stack info
         if vm_stack is not None and vm_stack_size is not None:
-            print(f"  VM Stack: ", end='')
-            print(terminal.print_type_tag('VALUE', int(vm_stack), f'size={vm_stack_size}'))
+            terminal.print(f"  VM Stack: ", end='')
+            terminal.print_type_tag('VALUE', int(vm_stack), f'size={vm_stack_size}')
         else:
-            print(f"  VM Stack: <unavailable>")
+            terminal.print(f"  VM Stack: <unavailable>")
         
         # Control Frame info
         if cfp is not None:
-            print(f"  $cfp = ", end='')
-            print(terminal.print_type_tag('rb_control_frame_t', int(cfp), None))
+            terminal.print(f"  $cfp = ", end='')
+            terminal.print_type_tag('rb_control_frame_t', int(cfp), None)
         else:
-            print(f"  $cfp = <unavailable>")
+            terminal.print(f"  $cfp = <unavailable>")
         
         # Storage info
         if storage is not None and not value.is_nil(storage):
-            print(f"  Storage: ", end='')
-            print(terminal.print_type_tag('VALUE', int(storage), None))
+            terminal.print(f"  Storage: ", end='')
+            terminal.print_type_tag('VALUE', int(storage), None)
         
         # Exception info
         if has_exception:
-            print(f"  $errinfo = ", end='')
-            print(terminal.print_type_tag('VALUE', int(errinfo), None))
-            print("    Exception present!")
+            terminal.print("  $errinfo = ", end='')
+            terminal.print_type_tag('VALUE', int(errinfo), None)
+            terminal.print()
+            terminal.print("    Exception present!")
         else:
             errinfo_int = int(errinfo) if errinfo else 0
             if errinfo_int == 4:  # Qnil
-                print("  Exception: None")
+                terminal.print("  Exception: None")
             elif errinfo_int == 0:  # Qfalse
-                print("  Exception: None (false)")
+                terminal.print("  Exception: None (false)")
             else:
-                print(f"  Exception: None")
+                terminal.print("  Exception: None")
         
         # Tag info (for ensure blocks)
         try:
             tag = self.ec['tag']
             tag_int = int(tag)
             if tag_int != 0:
-                print(f"  Tag: ", end='')
-                print(terminal.print_type_tag('rb_vm_tag', tag_int, None))
+                terminal.print("  Tag: ", end='')
+                terminal.print_type_tag('rb_vm_tag', tag_int, None)
+                terminal.print()
                 try:
                     retval = tag['retval']
                     retval_int = int(retval)
                     is_retval_special = (retval_int & 0x03) != 0 or retval_int == 0
                     if not is_retval_special:
-                        print(f"    $retval available (in ensure block)")
+                        terminal.print("    $retval available (in ensure block)")
                 except Exception:
                     pass
         except Exception:
