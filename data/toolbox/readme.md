@@ -125,7 +125,7 @@ command script import /path/to/gem/data/toolbox/init.py
 - `rb-heap-scan [--type TYPE] [--limit N]` - Scan Ruby heap for objects
 
 ### Stack Inspection
-- `rb-stack-print` - Print Ruby stack (coming soon)
+- `rb-stack-trace` - Print combined Ruby/C stack trace
 
 ## Migration Status
 

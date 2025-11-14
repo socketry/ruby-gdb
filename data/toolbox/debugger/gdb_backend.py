@@ -312,7 +312,7 @@ class Command:
 		"""Initialize and register a command.
 		
 		Args:
-			name: Command name (e.g., "rb-object-print")
+			name: Command name (e.g., "rb-print")
 			category: Command category (COMMAND_DATA or COMMAND_USER)
 		"""
 		self.name = name
@@ -597,7 +597,7 @@ def register(name, handler_class, usage=None, category=COMMAND_USER):
 	and delegates to the handler class for actual command logic.
 	
 	Args:
-		name: Command name (e.g., "rb-object-print")
+		name: Command name (e.g., "rb-print")
 		handler_class: Class to instantiate for handling the command
 		usage: Optional command.Usage specification for validation/help
 		category: Command category (COMMAND_USER, etc.)

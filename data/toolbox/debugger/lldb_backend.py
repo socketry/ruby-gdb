@@ -428,7 +428,7 @@ class Command:
 		"""Initialize and register a command.
 		
 		Args:
-			name: Command name (e.g., "rb-object-print")
+			name: Command name (e.g., "rb-print")
 			category: Command category (not used in LLDB)
 		"""
 		self.name = name
@@ -538,8 +538,8 @@ def set_convenience_variable(name, value):
 		name: Variable name (without $ prefix)
 		value: Value to set (can be Value wrapper or native value)
 	
-	Note: LLDB doesn't have direct convenience variables like GDB.
-	This implementation uses expression evaluation to set variables.
+	Note: LLDB convenience variables are created using expression evaluation.
+	The variable name will be prefixed with $ automatically.
 	"""
 	if isinstance(value, Value):
 		native_value = value._value
@@ -549,16 +549,45 @@ def set_convenience_variable(name, value):
 	# LLDB approach: use expression to create a persistent variable
 	# Variables in LLDB are prefixed with $
 	target = lldb.debugger.GetSelectedTarget()
-	frame = target.GetProcess().GetSelectedThread().GetSelectedFrame()
+	if not target:
+		return
 	
-	# Create a persistent variable by evaluating an expression
+	process = target.GetProcess()
+	if not process:
+		return
+	
+	thread = process.GetSelectedThread()
+	if not thread:
+		return
+	
+	frame = thread.GetSelectedFrame()
+	if not frame:
+		return
+	
+	# Create a persistent variable by evaluating an assignment expression
 	if hasattr(native_value, 'GetValue'):
 		# It's an SBValue
 		addr = native_value.GetValueAsUnsigned()
 		type_name = native_value.GetType().GetName()
-		frame.EvaluateExpression(f"({type_name})0x{addr:x}", lldb.SBExpressionOptions())
-	# For now, simplified implementation
-	# Full implementation would require more complex value handling
+		
+		# Use expr command to create persistent variable
+		# Format: expr <type> $varname = (<type>)address
+		expr = f"{type_name} ${name} = ({type_name})0x{addr:x}"
+		
+		options = lldb.SBExpressionOptions()
+		options.SetIgnoreBreakpoints(True)
+		options.SetFetchDynamicValue(lldb.eNoDynamicValues)
+		options.SetTimeoutInMicroSeconds(100000)  # 0.1 second timeout
+		options.SetTryAllThreads(False)
+		
+		# Evaluate the expression to create the persistent variable
+		result = frame.EvaluateExpression(expr, options)
+		
+		# Check for errors
+		if result.GetError().Fail():
+			error_msg = result.GetError().GetCString()
+			# Silently ignore errors for now - convenience variables are optional
+			pass
 
 
 def execute(command, from_tty=False, to_string=False):
@@ -894,7 +923,7 @@ def register(name, handler_class, usage=None, category=COMMAND_USER):
 	and delegates to the handler class for actual command logic.
 	
 	Args:
-		name: Command name (e.g., "rb-object-print")
+		name: Command name (e.g., "rb-print")
 		handler_class: Class to instantiate for handling the command
 		usage: Optional command.Usage specification for validation/help
 		category: Command category (COMMAND_USER, etc.)

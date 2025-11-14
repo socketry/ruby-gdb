@@ -29,39 +29,39 @@ def is_type(value, ruby_type_constant):
 
 # Map of type constants to their names for display
 TYPE_NAMES = {
-	'RUBY_T_NONE': 'None',
-	'RUBY_T_OBJECT': 'Object',
-	'RUBY_T_CLASS': 'Class',
-	'RUBY_T_MODULE': 'Module',
-	'RUBY_T_FLOAT': 'Float',
-	'RUBY_T_STRING': 'String',
-	'RUBY_T_REGEXP': 'Regexp',
-	'RUBY_T_ARRAY': 'Array',
-	'RUBY_T_HASH': 'Hash',
-	'RUBY_T_STRUCT': 'Struct',
-	'RUBY_T_BIGNUM': 'Bignum',
-	'RUBY_T_FILE': 'File',
-	'RUBY_T_DATA': 'Data',
-	'RUBY_T_MATCH': 'Match',
-	'RUBY_T_COMPLEX': 'Complex',
-	'RUBY_T_RATIONAL': 'Rational',
-	'RUBY_T_NIL': 'Nil',
-	'RUBY_T_TRUE': 'True',
-	'RUBY_T_FALSE': 'False',
-	'RUBY_T_SYMBOL': 'Symbol',
-	'RUBY_T_FIXNUM': 'Fixnum',
-	'RUBY_T_UNDEF': 'Undef',
-	'RUBY_T_IMEMO': 'IMemo',
-	'RUBY_T_NODE': 'Node',
-	'RUBY_T_ICLASS': 'IClass',
-	'RUBY_T_ZOMBIE': 'Zombie',
+	'RUBY_T_NONE': 'T_NONE',
+	'RUBY_T_OBJECT': 'T_OBJECT',
+	'RUBY_T_CLASS': 'T_CLASS',
+	'RUBY_T_MODULE': 'T_MODULE',
+	'RUBY_T_FLOAT': 'T_FLOAT',
+	'RUBY_T_STRING': 'T_STRING',
+	'RUBY_T_REGEXP': 'T_REGEXP',
+	'RUBY_T_ARRAY': 'T_ARRAY',
+	'RUBY_T_HASH': 'T_HASH',
+	'RUBY_T_STRUCT': 'T_STRUCT',
+	'RUBY_T_BIGNUM': 'T_BIGNUM',
+	'RUBY_T_FILE': 'T_FILE',
+	'RUBY_T_DATA': 'T_DATA',
+	'RUBY_T_MATCH': 'T_MATCH',
+	'RUBY_T_COMPLEX': 'T_COMPLEX',
+	'RUBY_T_RATIONAL': 'T_RATIONAL',
+	'RUBY_T_NIL': 'T_NIL',
+	'RUBY_T_TRUE': 'T_TRUE',
+	'RUBY_T_FALSE': 'T_FALSE',
+	'RUBY_T_SYMBOL': 'T_SYMBOL',
+	'RUBY_T_FIXNUM': 'T_FIXNUM',
+	'RUBY_T_UNDEF': 'T_UNDEF',
+	'RUBY_T_IMEMO': 'T_IMEMO',
+	'RUBY_T_NODE': 'T_NODE',
+	'RUBY_T_ICLASS': 'T_ICLASS',
+	'RUBY_T_ZOMBIE': 'T_ZOMBIE',
 }
 
 def type_name(value):
 	"""Get the human-readable type name for a VALUE.
 	
 	Returns:
-		String like 'String', 'Array', 'Hash', etc., or 'Unknown'
+		String like 'T_STRING', 'T_ARRAY', 'T_HASH', etc., or 'Unknown(0x...)'
 	"""
 	type_flag = type_of(value)
 	
@@ -85,16 +85,14 @@ class RBasic:
 	
 	def __str__(self):
 		type_str = type_name(self.value)
-		return f"<{type_str}:0x{int(self.value):x}>"
+		return f"<{type_str}@0x{int(self.value):x}>"
 	
 	def print_to(self, terminal):
 		"""Print formatted basic object representation."""
 		type_str = type_name(self.value)
 		addr = int(self.value)
-		# Note: Using : instead of @ for basic objects
-		import format as fmt
-		terminal.print(fmt.metadata, '<', fmt.reset, fmt.type, type_str, fmt.reset, end='')
-		terminal.print(fmt.metadata, f':0x{addr:x}>', fmt.reset, end='')
+		# Use print_type_tag for consistency with other types
+		terminal.print_type_tag(type_str, addr)
 	
 	def print_recursive(self, printer, depth):
 		"""Print this basic object (no recursion)."""

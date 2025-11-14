@@ -284,8 +284,8 @@ class RubyContextHandler:
 			
 			print()
 			print("Now you can use:")
-			print("  rb-object-print $errinfo")
-			print("  rb-object-print $ec->cfp->sp[-1]")
+			print("  rb-print $errinfo")
+			print("  rb-print $ec->cfp->sp[-1]")
 			print("  rb-stack-trace")
 			
 		except Exception as e:

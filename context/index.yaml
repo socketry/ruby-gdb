@@ -12,7 +12,7 @@ files:
     programs and core dumps with GDB or LLDB.
 - path: object-inspection.md
   title: Object Inspection
-  description: This guide explains how to use `rb-object-print` to inspect Ruby objects,
+  description: This guide explains how to use `rb-print` to inspect Ruby objects,
     hashes, arrays, and structs in GDB.
 - path: stack-inspection.md
   title: Stack Inspection
