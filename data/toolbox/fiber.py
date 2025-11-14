@@ -193,9 +193,11 @@ class RubyFiber:
         """
         # Print fiber VALUE and address
         print(f"Fiber VALUE: ", end='')
-        print(terminal.print_type_tag('T_DATA', int(self.value), None))
+        terminal.print_type_tag('T_DATA', int(self.value), None)
+        print()
         print(f"  Address: ", end='')
-        print(terminal.print_type_tag('struct rb_fiber_struct', self.address, None))
+        terminal.print_type_tag('struct rb_fiber_struct', self.address, None)
+        print()
         
         # Print status
         print(f"  Status: {self.status}")
@@ -208,16 +210,19 @@ class RubyFiber:
         # Print Stack with formatted pointer
         stack_type = str(self.stack_base.type)
         print(f"  Stack: ", end='')
-        print(terminal.print_type_tag(stack_type, int(self.stack_base), f'size={self.stack_size}'))
+        terminal.print_type_tag(stack_type, int(self.stack_base))
+        print()
         
         # Print VM Stack with formatted pointer
         vm_stack_type = str(self.vm_stack.type)
         print(f"  VM Stack: ", end='')
-        print(terminal.print_type_tag(vm_stack_type, int(self.vm_stack), f'size={self.vm_stack_size}'))
+        terminal.print_type_tag(vm_stack_type, int(self.vm_stack))
+        print()
         
         # Print CFP
         print(f"  CFP: ", end='')
-        print(terminal.print_type_tag('rb_control_frame_t', int(self.cfp), None))
+        terminal.print_type_tag('rb_control_frame_t', int(self.cfp), None)
+        print()
 
 
 class RubyFiberScanHeapHandler:
@@ -308,14 +313,8 @@ class RubyFiberScanHeapHandler:
             print(f"Warning: Failed to load cache: {e}")
             return None
 
-    def invoke(self, arg, from_tty):
+    def invoke(self, arguments, terminal):
         global _fiber_cache
-
-        # Create terminal for formatting
-        terminal = format.create_terminal(from_tty)
-
-        # Parse arguments using the robust parser
-        arguments = command.parse_arguments(arg if arg else "")
         
         # Get limit from --limit option
         limit = None
@@ -448,9 +447,10 @@ class RubyFiberScanHeapHandler:
         """
         # Print fiber index with VALUE and pointer
         print(f"Fiber #{index}: ", end='')
-        print(terminal.print_type_tag('T_DATA', int(fiber_obj.value)), end='')
+        terminal.print_type_tag('T_DATA', int(fiber_obj.value))
         print(' → ', end='')
-        print(terminal.print_type_tag('struct rb_fiber_struct', fiber_obj.address))
+        terminal.print_type_tag('struct rb_fiber_struct', fiber_obj.address)
+        print()
         
         # Print status
         print(f"  Status: {fiber_obj.status}")
@@ -467,17 +467,20 @@ class RubyFiberScanHeapHandler:
         # Print Stack with formatted pointer
         stack_type = str(fiber_obj.stack_base.type)
         print(f"  Stack: ", end='')
-        print(terminal.print_type_tag(stack_type, int(fiber_obj.stack_base), f'size={fiber_obj.stack_size}'))
+        terminal.print_type_tag(stack_type, int(fiber_obj.stack_base))
+        print()
         
         # Print VM Stack with formatted pointer
         vm_stack_type = str(fiber_obj.vm_stack.type)
         print(f"  VM Stack: ", end='')
-        print(terminal.print_type_tag(vm_stack_type, int(fiber_obj.vm_stack), f'size={fiber_obj.vm_stack_size}'))
+        terminal.print_type_tag(vm_stack_type, int(fiber_obj.vm_stack))
+        print()
         
         # Print CFP
         cfp_type = str(fiber_obj.cfp.type).replace(' *', '')  # Remove pointer marker for display
         print(f"  CFP: ", end='')
-        print(terminal.print_type_tag(cfp_type, int(fiber_obj.cfp)))
+        terminal.print_type_tag(cfp_type, int(fiber_obj.cfp))
+        print()
         print()
 
 
@@ -675,15 +678,16 @@ class RubyFiberSwitchHandler:
             _fiber_unwinder = RubyFiberUnwinder()
             gdb.unwinder.register_unwinder(None, _fiber_unwinder, replace=True)
 
-    def invoke(self, arg, from_tty):
+    def invoke(self, arguments, terminal):
         global _fiber_unwinder
 
+        # Check for deactivate
+        arg = arguments.expressions[0] if arguments.expressions else None
         if not arg:
-            self.usage()
+            print("Error: fiber parameter required")
             return
 
-        # Check for deactivate
-        if arg and arg.lower() in ('off', 'none', 'deactivate'):
+        if arg.lower() in ('off', 'none', 'deactivate'):
             if debugger.DEBUGGER_NAME == 'gdb' and _fiber_unwinder:
                 _fiber_unwinder.deactivate()
             set_current_fiber(None)
@@ -759,9 +763,10 @@ class RubyFiberSwitchHandler:
 
         # Print switch confirmation
         print(f"Switched to Fiber: ", end='')
-        print(terminal.print_type_tag('T_DATA', int(fiber_value), None), end='')
+        terminal.print_type_tag('T_DATA', int(fiber_value), None)
         print(' → ', end='')
-        print(terminal.print_type_tag('struct rb_fiber_struct', fiber_obj.address, None))
+        terminal.print_type_tag('struct rb_fiber_struct', fiber_obj.address, None)
+        print()
         print(f"  Status: {fiber_obj.status}")
         
         # Print exception if present (catch errors for terminated fibers)

@@ -175,11 +175,13 @@ class RubyContext:
         terminal.print("Execution Context:")
         terminal.print(f"  $ec = ", end='')
         terminal.print_type_tag('rb_execution_context_t', int(self.ec), None)
+        terminal.print()
         
         # VM Stack info
         if vm_stack is not None and vm_stack_size is not None:
             terminal.print(f"  VM Stack: ", end='')
-            terminal.print_type_tag('VALUE', int(vm_stack), f'size={vm_stack_size}')
+            terminal.print_type_tag('VALUE', int(vm_stack))
+            terminal.print()
         else:
             terminal.print(f"  VM Stack: <unavailable>")
         
@@ -187,6 +189,7 @@ class RubyContext:
         if cfp is not None:
             terminal.print(f"  $cfp = ", end='')
             terminal.print_type_tag('rb_control_frame_t', int(cfp), None)
+            terminal.print()
         else:
             terminal.print(f"  $cfp = <unavailable>")
         
@@ -194,6 +197,7 @@ class RubyContext:
         if storage is not None and not value.is_nil(storage):
             terminal.print(f"  Storage: ", end='')
             terminal.print_type_tag('VALUE', int(storage), None)
+            terminal.print()
         
         # Exception info
         if has_exception:

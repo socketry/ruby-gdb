@@ -636,48 +636,48 @@ class RubyHeapScanHandler:
 				try:
 					interpreted = value_module.interpret(obj)
 					
-					print(terminal.print(
+					terminal.print(
 						format.metadata, f"  [{i}] ",
 						format.dim, f"${var_name} = ",
 						format.reset, interpreted
-					))
+					)
 				except Exception as e:
-					print(terminal.print(
+					terminal.print(
 						format.metadata, f"  [{i}] ",
 						format.dim, f"${var_name} = ",
 						format.error, f"<error: {e}>"
-					))
+					)
 			
 			print()
-			print(terminal.print(
+			terminal.print(
 				format.dim, 
 				f"Objects saved in $heap0 through $heap{len(objects)-1}",
 				format.reset
-			))
+			)
 			
 			# Save next address to $heap for pagination
 			if next_address is not None:
 				# Save the next address to continue from
 				void_ptr_type = constants.type_struct('void').pointer()
 				debugger.set_convenience_variable('heap', debugger.create_value(next_address, void_ptr_type))
-				print(terminal.print(
+				terminal.print(
 					format.dim,
 					f"Next scan address saved to $heap: 0x{next_address:016x}",
 					format.reset
-				))
-				print(terminal.print(
+				)
+				terminal.print(
 					format.dim,
 					f"Run 'rb-heap-scan --type {type_option if type_option else '...'} --from $heap' for next page",
 					format.reset
-				))
+				)
 			else:
 				# Reached the end of the heap - unset $heap so next scan starts fresh
 				debugger.set_convenience_variable('heap', None)
-				print(terminal.print(
+				terminal.print(
 					format.dim,
 					f"Reached end of heap (no more objects to scan)",
 					format.reset
-				))
+				)
 			
 		except Exception as e:
 			print(f"Error: {e}")

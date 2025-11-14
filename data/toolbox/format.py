@@ -62,22 +62,22 @@ class Text:
 				self.output.write(str(arg))
 		self.output.write(end)
 	
-	def print_type_tag(self, type_name, address=None, details=None):
+	def print_type_tag(self, type_name, addr=None, details=None):
 		"""Print a type tag like <T_ARRAY@0xABCD embedded length=3>.
 		
 		Arguments:
 			type_name: Type name (e.g., "T_ARRAY", "void *")
-			address_val: Optional hex address (as integer or hex string without 0x)
+			addr: Optional hex address (as integer or hex string without 0x)
 			details: Optional details string (e.g., "embedded length=3")
 		"""
-		if isinstance(address, int):
-			address = f"{address:x}"
+		if isinstance(addr, int):
+			addr = f"{addr:x}"
 		
 		self.print(metadata, '<', reset, type, type_name, reset, end='')
 		
-		if address:
+		if addr:
 			# @ symbol in dim, address in magenta
-			self.print(metadata, '@', reset, address, f'0x{address}', reset, end='')
+			self.print(metadata, '@', reset, address, f'0x{addr}', reset, end='')
 		
 		if details:
 			self.print(metadata, f' {details}', reset, end='')

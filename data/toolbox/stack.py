@@ -184,11 +184,11 @@ class RubyStackPrinter:
                                 func_name = f" (0x{func_addr:x})"
                             
                             # Print C frame with cyan/dimmed formatting
-                            print(self.terminal.print(
+                            self.terminal.print(
                                 format.metadata, f"  #{depth}: ",
                                 format.dim, "[C function", func_name, "]",
                                 format.reset
-                            ))
+                            )
                             return
                         except:
                             pass
@@ -196,21 +196,21 @@ class RubyStackPrinter:
                 pass
             
             # Fallback if we couldn't extract info
-            print(self.terminal.print(
+            self.terminal.print(
                 format.metadata, f"  #{depth}: ",
                 format.dim, "[C function or native frame]",
                 format.reset
-            ))
+            )
             return
         
         pc = cfp['pc']
         
         if int(pc) == 0:
-            print(self.terminal.print(
+            self.terminal.print(
                 format.metadata, f"  #{depth}: ",
                 format.error, "???:???:in '???'",
                 format.reset
-            ))
+            )
             return
         
         # Check if it's an ifunc (internal function)
@@ -228,11 +228,11 @@ class RubyStackPrinter:
                 
                 if (flags & mask) == expected:
                     # It's an ifunc
-                    print(self.terminal.print(
+                    self.terminal.print(
                         format.metadata, f"  #{depth}: ",
                         format.dim, "[ifunc]",
                         format.reset
-                    ))
+                    )
                     return
             except:
                 pass
@@ -241,20 +241,20 @@ class RubyStackPrinter:
             # Get location information
             body = iseq['body']
             if body is None:
-                print(self.terminal.print(
+                self.terminal.print(
                     format.metadata, f"  #{depth}: ",
                     format.error, "???:???:in '???'",
                     format.reset
-                ))
+                )
                 return
                 
             location = body['location']
             if location is None:
-                print(self.terminal.print(
+                self.terminal.print(
                     format.metadata, f"  #{depth}: ",
                     format.error, "???:???:in '???'",
                     format.reset
-                ))
+                )
                 return
                 
             pathobj = location['pathobj']
@@ -268,7 +268,7 @@ class RubyStackPrinter:
             lineno = self._get_lineno(cfp)
             
             # Print Ruby frame with highlighting
-            print(self.terminal.print(
+            self.terminal.print(
                 format.metadata, f"  #{depth}: ",
                 format.string, path,
                 format.reset, ":",
@@ -276,18 +276,18 @@ class RubyStackPrinter:
                 format.reset, ":in '",
                 format.method, label_str,
                 format.reset, "'"
-            ))
+            )
             
             # If --values flag is set, print stack values
             if self.show_values:
                 self._print_stack_values(cfp, iseq)
             
         except (debugger.Error, RuntimeError) as e:
-            print(self.terminal.print(
+            self.terminal.print(
                 format.metadata, f"  #{depth}: ",
                 format.error, f"[error reading frame info: {e}]",
                 format.reset
-            ))
+            )
     
     def _print_stack_values(self, cfp, iseq):
         """Print Ruby VALUEs on the control frame's stack pointer.
@@ -343,7 +343,7 @@ class RubyStackPrinter:
             max_values = 10
             values_printed = 0
             
-            print(self.terminal.print(format.dim, "    Stack values:", format.reset))
+            self.terminal.print(format.dim, "    Stack values:", format.reset)
             
             # Calculate offset from ep to show position
             while value_ptr >= ep and values_printed < max_values:
@@ -362,12 +362,12 @@ class RubyStackPrinter:
                     # Try to get a brief representation of the value
                     val_str = self._format_value_brief(val)
                     
-                    print(self.terminal.print(
+                    self.terminal.print(
                         format.metadata, f"      {label:20s} ",
                         format.dim, f"= ",
                         format.reset, val_str,
                         format.reset
-                    ))
+                    )
                     
                     values_printed += 1
                     value_ptr -= 1
@@ -375,7 +375,7 @@ class RubyStackPrinter:
                     break
             
             if values_printed == 0:
-                print(self.terminal.print(format.dim, "      (empty stack)", format.reset))
+                self.terminal.print(format.dim, "      (empty stack)", format.reset)
                 
         except (debugger.Error, RuntimeError) as e:
             # Silently skip if we can't read stack values
@@ -582,11 +582,12 @@ class RubyStackTraceHandler:
                 # Use the selected fiber's execution context
                 print(f"Stack trace for selected fiber:")
                 print(f"  Fiber: ", end='')
-                print(self.printer.terminal.print_type_tag('T_DATA', int(current_fiber.value), None))
+                self.printer.terminal.print_type_tag('T_DATA', int(current_fiber.value), None)
+                print()
                 print()
                 
                 ec = current_fiber.pointer['cont']['saved_ec'].address
-                self.printer.print_backtrace(ec, from_tty)
+                self.printer.print_backtrace(ec, True)
             else:
                 # Use current thread's execution context
                 print("Stack trace for current thread:")
@@ -603,7 +604,7 @@ class RubyStackTraceHandler:
                         print("  - Ensure the process is stopped at a Ruby frame")
                         return
                     
-                    self.printer.print_backtrace(ctx.ec, from_tty)
+                    self.printer.print_backtrace(ctx.ec, True)
                 except debugger.Error as e:
                     print(f"Error getting execution context: {e}")
                     print("Try selecting a fiber first with 'rb-fiber-switch'")
