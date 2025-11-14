@@ -1,6 +1,7 @@
 """Ruby execution context utilities and commands."""
 
 import debugger
+import command
 import format
 import value
 import rexception
@@ -116,6 +117,14 @@ class RubyContext:
                 pass
         return self._vm_stack_size
     
+    @property
+    def storage(self):
+        """Get fiber storage VALUE."""
+        try:
+            return self.ec['storage']
+        except Exception:
+            return None
+    
     def setup_convenience_variables(self):
         """Set up convenience variables for this execution context.
         
@@ -155,31 +164,44 @@ class RubyContext:
         Args:
             terminal: Terminal formatter for output
         """
+        # Cache property lookups
+        vm_stack = self.vm_stack
+        vm_stack_size = self.vm_stack_size
+        cfp = self.cfp
+        storage = self.storage
+        errinfo = self.errinfo
+        has_exception = self.has_exception
+        
         print("Execution Context:")
         print(f"  $ec = ", end='')
         print(terminal.print_type_tag('rb_execution_context_t', int(self.ec), None))
         
         # VM Stack info
-        if self.vm_stack is not None and self.vm_stack_size is not None:
+        if vm_stack is not None and vm_stack_size is not None:
             print(f"  VM Stack: ", end='')
-            print(terminal.print_type_tag('VALUE', int(self.vm_stack), f'size={self.vm_stack_size}'))
+            print(terminal.print_type_tag('VALUE', int(vm_stack), f'size={vm_stack_size}'))
         else:
             print(f"  VM Stack: <unavailable>")
         
         # Control Frame info
-        if self.cfp is not None:
+        if cfp is not None:
             print(f"  $cfp = ", end='')
-            print(terminal.print_type_tag('rb_control_frame_t', int(self.cfp), None))
+            print(terminal.print_type_tag('rb_control_frame_t', int(cfp), None))
         else:
             print(f"  $cfp = <unavailable>")
         
+        # Storage info
+        if storage is not None and not value.is_nil(storage):
+            print(f"  Storage: ", end='')
+            print(terminal.print_type_tag('VALUE', int(storage), None))
+        
         # Exception info
-        if self.has_exception:
+        if has_exception:
             print(f"  $errinfo = ", end='')
-            print(terminal.print_type_tag('VALUE', int(self.errinfo), None))
+            print(terminal.print_type_tag('VALUE', int(errinfo), None))
             print("    Exception present!")
         else:
-            errinfo_int = int(self.errinfo) if self.errinfo else 0
+            errinfo_int = int(errinfo) if errinfo else 0
             if errinfo_int == 4:  # Qnil
                 print("  Exception: None")
             elif errinfo_int == 0:  # Qfalse
@@ -290,6 +312,88 @@ class RubyContextCommand(debugger.Command):
             traceback.print_exc()
 
 
-# Register command
+class RubyContextStorageCommand(debugger.Command):
+    """Print the fiber storage from the current execution context.
+    
+    This command is a convenience wrapper around rb-object-print that
+    specifically prints $ec->storage (the inheritable fiber storage).
+    
+    Usage:
+        rb-context-storage [--depth N] [--debug]
+    
+    All flags are passed through to rb-object-print.
+    
+    Example:
+        (gdb) rb-context
+        (gdb) rb-context-storage --depth 3
+    
+    This is equivalent to:
+        (gdb) rb-context
+        (gdb) rb-object-print $ec->storage --depth 3
+    """
+    
+    def __init__(self):
+        super(RubyContextStorageCommand, self).__init__("rb-context-storage", debugger.COMMAND_USER)
+    
+    def invoke(self, arg, from_tty):
+        """Execute the rb-context-storage command."""
+        try:
+            # Get current execution context
+            ctx = RubyContext.current()
+            
+            if ctx is None:
+                print("Error: Could not get current execution context")
+                print("\nTry:")
+                print("  • Run rb-context first to set up execution context")
+                print("  • Break at a Ruby function")
+                print("  • Use rb-fiber-scan-switch to switch to a fiber")
+                return
+            
+            # Get storage
+            storage_val = ctx.storage
+            
+            if storage_val is None:
+                print("Error: Could not access fiber storage")
+                return
+            
+            # Check if it's nil
+            if value.is_nil(storage_val):
+                print("Fiber storage: nil")
+                return
+            
+            # Parse arguments (--depth, --debug, etc.)
+            arguments = command.parse_arguments(arg if arg else "")
+            
+            # Get depth flag
+            depth = 1  # Default depth
+            depth_str = arguments.get_option('depth')
+            if depth_str:
+                try:
+                    depth = int(depth_str)
+                except ValueError:
+                    print(f"Error: invalid depth '{depth_str}'")
+                    return
+            
+            # Get debug flag
+            debug = arguments.has_flag('debug')
+            
+            # Use inspect module to print the storage
+            import inspect as inspect_module
+            printer = inspect_module.RubyObjectPrinter()
+            
+            # Build arguments for the printer
+            flags_set = {'debug'} if debug else set()
+            args_for_printer = command.Arguments([storage_val], flags_set, {'depth': depth})
+            
+            printer.invoke(args_for_printer, terminal, from_tty)
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+# Register commands
 RubyContextCommand()
+RubyContextStorageCommand()
 

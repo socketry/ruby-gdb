@@ -341,6 +341,71 @@ class Command:
 		raise NotImplementedError("Subclasses must implement invoke()")
 
 
+def register(command_name, command_class, usage=None, category=COMMAND_USER):
+	"""Register a command with GDB using declarative interface.
+	
+	Creates a wrapper that handles argument parsing, validation, and delegation.
+	
+	Args:
+		command_name: Name of the command (e.g., "rb-object-print")
+		command_class: Class to instantiate (must have invoke(arguments, from_tty) method)
+		usage: Optional command.Usage specification for validation and help
+		category: Command category (COMMAND_USER or COMMAND_DATA)
+	
+	Returns:
+		The registered command wrapper instance
+	
+	Example:
+		class RubyObjectPrinter:
+			def invoke(self, arguments, from_tty):
+				value_expr = arguments.expressions[0]
+				depth = arguments.get_option('depth', 1)
+				# ... print logic
+		
+		debugger.register("rb-object-print", RubyObjectPrinter, 
+		                  usage=RubyObjectPrinter.USAGE)
+	"""
+	class RegisteredCommand(Command):
+		def __init__(self):
+			super().__init__(command_name, category)
+			self.command_instance = None
+			self.usage_spec = usage
+		
+		def invoke(self, arg, from_tty):
+			try:
+				# Parse and validate arguments
+				if self.usage_spec:
+					arguments = self.usage_spec.parse(arg if arg else "")
+				else:
+					# Fallback: use raw parsing
+					import command as cmd_module
+					arguments = cmd_module.parse_arguments(arg if arg else "")
+				
+				# Create terminal for formatting
+				import format
+				terminal = format.create_terminal(from_tty)
+				
+				# Lazy instantiate command class
+				if self.command_instance is None:
+					self.command_instance = command_class()
+				
+				# Call command's invoke with parsed Arguments object and terminal
+				self.command_instance.invoke(arguments, terminal, from_tty)
+				
+			except ValueError as e:
+				# Validation error - show usage
+				print(f"Error: {e}")
+				if self.usage_spec:
+					print()
+					print(self.usage_spec.help_text(command_name))
+			except Exception as e:
+				print(f"Error: {e}")
+				import traceback
+				traceback.print_exc()
+	
+	return RegisteredCommand()
+
+
 def parse_and_eval(expression):
 	"""Evaluate an expression in the debugger.
 	
@@ -587,6 +652,74 @@ def create_value_from_address(address, value_type):
 	ptr_type = value_type.pointer()
 	addr_val = gdb.Value(address).cast(ptr_type)
 	return Value(addr_val.dereference())
+
+
+def register(name, handler_class, usage=None, category=COMMAND_USER):
+	"""Register a command with GDB using a handler class.
+	
+	This creates a wrapper Command that handles parsing, terminal setup,
+	and delegates to the handler class for actual command logic.
+	
+	Args:
+		name: Command name (e.g., "rb-object-print")
+		handler_class: Class to instantiate for handling the command
+		usage: Optional command.Usage specification for validation/help
+		category: Command category (COMMAND_USER, etc.)
+	
+	Example:
+		class PrintHandler:
+			def invoke(self, arguments, terminal):
+				depth = arguments.get_option('depth', 1)
+				print(f"Depth: {depth}")
+		
+		usage = command.Usage(
+			summary="Print something",
+			options={'depth': (int, 1)},
+			flags=['debug']
+		)
+		debugger.register("my-print", PrintHandler, usage=usage)
+	
+	Returns:
+		The registered Command instance
+	"""
+	class RegisteredCommand(Command):
+		def __init__(self):
+			super(RegisteredCommand, self).__init__(name, category)
+			self.usage_spec = usage
+			self.handler_class = handler_class
+		
+		def invoke(self, arg, from_tty):
+			"""GDB entry point - parses arguments and delegates to handler."""
+			try:
+				# Parse and validate arguments
+				if self.usage_spec:
+					try:
+						arguments = self.usage_spec.parse(arg if arg else "")
+					except ValueError as e:
+						print(f"Error: {e}")
+						print()
+						print(self.usage_spec.help_text(name))
+						return
+				else:
+					# Fallback to basic parsing without validation
+					import command
+					arguments = command.parse_arguments(arg if arg else "")
+				
+				# Create terminal for formatting
+				import format
+				terminal = format.create_terminal(from_tty)
+				
+				# Instantiate handler and invoke
+				handler = self.handler_class()
+				handler.invoke(arguments, terminal)
+				
+			except Exception as e:
+				print(f"Error: {e}")
+				import traceback
+				traceback.print_exc()
+	
+	# Instantiate and register the command with GDB
+	return RegisteredCommand()
 
 
 

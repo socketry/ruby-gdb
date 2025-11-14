@@ -24,8 +24,8 @@ failed_extensions = []
 
 # Try to load each extension individually
 extensions_to_load = [
-	('object', 'rb-object-print'),
-	('context', 'rb-context'),
+	('inspect', 'rb-inspect'),
+	('context', 'rb-context, rb-context-storage'),
 	('fiber', 'rb-fiber-scan-heap, rb-fiber-switch'),
 	('stack', 'rb-stack-trace'),
 	('heap', 'rb-heap-scan'),
@@ -33,8 +33,10 @@ extensions_to_load = [
 
 for module_name, commands in extensions_to_load:
 	try:
-		if module_name == 'object':
-			import object
+		print(f"DEBUG: Loading module {module_name}", file=sys.stderr)
+		if module_name == 'inspect':
+			import inspect
+			print(f"DEBUG: inspect module loaded successfully", file=sys.stderr)
 		elif module_name == 'context':
 			import context
 		elif module_name == 'fiber':
@@ -44,8 +46,12 @@ for module_name, commands in extensions_to_load:
 		elif module_name == 'heap':
 			import heap
 		loaded_extensions.append((module_name, commands))
-	except ImportError as e:
+	except Exception as e:
+		# Catch all exceptions, not just ImportError
 		failed_extensions.append((module_name, str(e)))
+		import traceback
+		print(f"Failed to load {module_name}: {e}", file=sys.stderr)
+		traceback.print_exc(file=sys.stderr)
 
 # Silently load - no status messages printed by default
 # Users can run 'help' to see available commands
@@ -53,6 +59,9 @@ for module_name, commands in extensions_to_load:
 # For LLDB, register commands that were successfully loaded
 if debugger.DEBUGGER_NAME == 'lldb':
 	import lldb
+	
+	# Debug: Show what commands are in the registry
+	print(f"DEBUG: Commands in registry: {list(debugger.Command._commands.keys())}", file=sys.stderr)
 	
 	# Get all registered commands
 	for cmd_name, cmd_obj in debugger.Command._commands.items():

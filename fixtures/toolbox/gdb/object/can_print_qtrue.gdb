@@ -2,6 +2,6 @@
 
 source data/toolbox/init.py
 
-rb-object-print 20
+rb-inspect 20
 quit
 
