@@ -124,7 +124,10 @@ class Usage:
 			if option_name not in self.options:
 				raise ValueError(f"Unknown option: --{option_name}")
 			
-			option_type, default = self.options[option_name]
+			# Unpack option spec (handle 2-tuple or 3-tuple)
+			opt_spec = self.options[option_name]
+			option_type = opt_spec[0]
+			option_default = opt_spec[1]
 			
 			# Convert to specified type
 			try:
@@ -141,9 +144,10 @@ class Usage:
 				raise ValueError(f"Invalid value for --{option_name}: {option_value} (expected {option_type.__name__})")
 		
 		# Add defaults for missing options
-		for option_name, (option_type, default) in self.options.items():
-			if option_name not in converted_options and default is not None:
-				converted_options[option_name] = default
+		for option_name, opt_spec in self.options.items():
+			option_default = opt_spec[1]
+			if option_name not in converted_options and option_default is not None:
+				converted_options[option_name] = option_default
 		
 		# Validate flags
 		for flag_name in arguments.flags:
