@@ -3,6 +3,7 @@ import sys
 import command
 import constants
 import format
+import rvalue
 
 # Constants
 RBASIC_FLAGS_TYPE_MASK = 0x1f
@@ -612,8 +613,6 @@ class RubyHeapScanHandler:
 					print("(You may have reached the end of the heap)")
 				return
 			
-			import value as value_module
-			
 			print(f"Found {len(objects)} object(s):")
 			print()
 			
@@ -625,7 +624,7 @@ class RubyHeapScanHandler:
 				
 				# Try to interpret and display the object
 				try:
-					interpreted = value_module.interpret(obj)
+					interpreted = rvalue.interpret(obj)
 					
 					terminal.print(
 						format.metadata, f"  [{i}] ",

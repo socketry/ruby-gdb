@@ -3,7 +3,7 @@
 import debugger
 import command
 import format
-import value as rvalue
+import rvalue
 import rexception
 
 

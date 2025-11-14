@@ -6,7 +6,7 @@ import sys
 # Import utilities
 import command
 import constants
-import value as rvalue
+import rvalue
 import rstring
 import rarray
 import rhash

@@ -12,7 +12,7 @@ if debugger.DEBUGGER_NAME == 'gdb':
 # Import command parser
 import command
 import constants
-import value as rvalue
+import rvalue
 import format
 import heap
 import rexception

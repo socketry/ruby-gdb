@@ -6,7 +6,7 @@ less prominent and values more readable.
 """
 
 import sys
-import value as rvalue
+import rvalue
 
 class Style:
 	"""Sentinel object representing a style."""

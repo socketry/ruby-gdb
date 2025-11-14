@@ -1,6 +1,6 @@
 import debugger
 import constants
-import value as rvalue
+import rvalue
 import rstring
 
 class RClass:

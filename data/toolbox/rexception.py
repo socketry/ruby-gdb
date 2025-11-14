@@ -1,7 +1,7 @@
 import debugger
 import constants
 import format
-import value as rvalue
+import rvalue
 import rstring
 import rclass
 

@@ -8,7 +8,7 @@ import command
 import constants
 import context
 import format
-import value as rvalue
+import rvalue
 import rstring
 import rexception
 import rsymbol
